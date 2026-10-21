@@ -17,27 +17,23 @@ package handlers
 
 import (
 	"html/template"
+	"io/fs"
 	"log/slog"
 	"net/http"
-	"path/filepath"
-	"runtime"
+	"path"
 
 	"github.com/MirajHoque/todo-app/internal/logger"
 )
 
 // PageHandler serves HTML pages using Go templates.
 type PageHandler struct {
-	templatesDir string
+	templates fs.FS
 }
 
 // NewPageHandler creates a PageHandler.
-// It finds the templates directory relative to the project root.
-func NewPageHandler() *PageHandler {
-	_, filename, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-	return &PageHandler{
-		templatesDir: filepath.Join(projectRoot, "web", "templates"),
-	}
+// templates must contain a templates/ directory (see web.FS).
+func NewPageHandler(templates fs.FS) *PageHandler {
+	return &PageHandler{templates: templates}
 }
 
 // render parses and executes a template, writing the result to w.
@@ -47,9 +43,9 @@ func (h *PageHandler) render(w http.ResponseWriter, r *http.Request, page string
 
 	// Parse base layout + the specific page template together.
 	// They must be parsed together so the block definitions work.
-	tmpl, err := template.ParseFiles(
-		filepath.Join(h.templatesDir, "base.html"),
-		filepath.Join(h.templatesDir, page),
+	tmpl, err := template.ParseFS(h.templates,
+		path.Join("templates", "base.html"),
+		path.Join("templates", page),
 	)
 	if err != nil {
 		log.Error("failed to parse template",

@@ -16,19 +16,18 @@ package db
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/MirajHoque/todo-app/internal/logger"
 )
 
-// Migrate runs all SQL files in the migrations/ directory that have not
-// been run yet. Files are run in alphabetical order — which matches the
-// 001_, 002_ numbering convention.
-func (db *DB) Migrate(ctx context.Context, migrationsDir string, log *slog.Logger) error {
+// Migrate runs all SQL files in migrationsFS that have not been run yet.
+// Files are run in alphabetical order — which matches the 001_, 002_
+// numbering convention.
+func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS, log *slog.Logger) error {
 	// Create the tracking table if it doesn't exist yet.
 	// This is idempotent — safe to run every startup.
 	_, err := db.Pool.Exec(ctx, `
@@ -41,10 +40,10 @@ func (db *DB) Migrate(ctx context.Context, migrationsDir string, log *slog.Logge
 		return fmt.Errorf("migrate: create schema_migrations table: %w", err)
 	}
 
-	// Read all .sql files from the migrations directory.
-	entries, err := os.ReadDir(migrationsDir)
+	// Read all .sql files from the migrations filesystem.
+	entries, err := fs.ReadDir(migrationsFS, ".")
 	if err != nil {
-		return fmt.Errorf("migrate: read directory %q: %w", migrationsDir, err)
+		return fmt.Errorf("migrate: read migrations: %w", err)
 	}
 
 	// Collect only .sql files and sort them alphabetically.
@@ -76,8 +75,7 @@ func (db *DB) Migrate(ctx context.Context, migrationsDir string, log *slog.Logge
 		}
 
 		// Read the SQL file content.
-		path := filepath.Join(migrationsDir, filename)
-		sql, err := os.ReadFile(path)
+		sql, err := fs.ReadFile(migrationsFS, filename)
 		if err != nil {
 			return fmt.Errorf("migrate: read %q: %w", filename, err)
 		}

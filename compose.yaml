@@ -1,0 +1,78 @@
+# ============================================================
+# compose.yaml
+#
+# Runs the todo-app container on your Linux server
+# alongside your existing Loki + Alloy + Grafana stack.
+#
+# We do NOT include Loki/Alloy/Grafana here because you
+# already have them running. We just run the app.
+#
+# Usage:
+#   docker compose up -d          → start in background
+#   docker compose down           → stop
+#   docker compose logs -f        → tail logs
+#   docker compose pull && docker compose up -d  → deploy update
+# ============================================================
+
+services:
+  todo-app:
+    # Build from the Dockerfile in the current directory
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Tag for the built image. On the server, point this at your
+    # registry (e.g. ghcr.io/mirajhoque/todo-app:1.2.3) so
+    # `docker compose pull` has something to pull.
+    image: todo-app:latest
+
+    # Container name — used by Alloy to find logs
+    container_name: todo-app
+
+    # Always restart if the container crashes or server reboots
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    # Load environment variables from .env file
+    # Never hardcode secrets in compose.yaml
+    env_file:
+      - .env
+
+    # Logging — use the json-file driver so Docker writes
+    # structured logs that Alloy can read
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"    # rotate when file hits 50MB
+        max-file: "5"      # keep 5 rotated files
+
+    # Health check is defined in the Dockerfile (HEALTHCHECK) —
+    # visible in `docker ps` output, no need to repeat it here.
+
+    # Hardening — the app only needs to run one binary and talk
+    # to the network, so take everything else away.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+
+    # Resource limits — one runaway container can't take down the host
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+
+    # Graceful shutdown in main.go waits up to 10s — give it time
+    stop_grace_period: 15s
+
+    # Labels — Alloy uses these to find and tag container logs
+    labels:
+      - "logging=alloy"
+      - "service=todo-app"
+      - "env=production"

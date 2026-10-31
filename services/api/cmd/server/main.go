@@ -13,16 +13,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/MirajHoque/todo-app/internal/agents"
-	agentmemory "github.com/MirajHoque/todo-app/internal/agents/memory"
-	"github.com/MirajHoque/todo-app/internal/auth"
-	"github.com/MirajHoque/todo-app/internal/config"
-	"github.com/MirajHoque/todo-app/internal/db"
-	"github.com/MirajHoque/todo-app/internal/handlers"
-	"github.com/MirajHoque/todo-app/internal/logger"
-	"github.com/MirajHoque/todo-app/internal/middleware"
-	"github.com/MirajHoque/todo-app/migrations"
-	"github.com/MirajHoque/todo-app/web"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/agents"
+	agentmemory "github.com/MirajHoque/todo-microservice/services/api/internal/agents/memory"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/auth"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/config"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/handlers"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
+	"github.com/MirajHoque/todo-microservice/services/api/migrations"
+	"github.com/MirajHoque/todo-microservice/services/api/web"
 	// <pathOftheModule>/<packageWantToImport>
 )
 

@@ -1,11 +1,12 @@
 # ============================================================
 # compose.yaml
 #
-# Runs the todo-app container on your Linux server
-# alongside your existing Loki + Alloy + Grafana stack.
+# Runs every service locally from one command. New services
+# are added here as they are split out of services/api
+# (see docs/ROADMAP.md).
 #
-# We do NOT include Loki/Alloy/Grafana here because you
-# already have them running. We just run the app.
+# Each service reads its own env file: services/<name>/.env
+# (copy services/<name>/.env.example to get started).
 #
 # Usage:
 #   docker compose up -d          → start in background
@@ -15,19 +16,19 @@
 # ============================================================
 
 services:
-  todo-app:
-    # Build from the Dockerfile in the current directory
+  api:
+    # Build from the service's own folder — each service is self-contained
     build:
-      context: .
+      context: ./services/api
       dockerfile: Dockerfile
 
     # Tag for the built image. On the server, point this at your
     # registry (e.g. ghcr.io/mirajhoque/todo-app:1.2.3) so
     # `docker compose pull` has something to pull.
-    image: todo-app:latest
+    image: todo-api:latest
 
     # Container name — used by Alloy to find logs
-    container_name: todo-app
+    container_name: todo-api
 
     # Always restart if the container crashes or server reboots
     restart: unless-stopped
@@ -38,7 +39,7 @@ services:
     # Load environment variables from .env file
     # Never hardcode secrets in compose.yaml
     env_file:
-      - .env
+      - ./services/api/.env
 
     # Logging — use the json-file driver so Docker writes
     # structured logs that Alloy can read
@@ -74,5 +75,5 @@ services:
     # Labels — Alloy uses these to find and tag container logs
     labels:
       - "logging=alloy"
-      - "service=todo-app"
+      - "service=todo-api"
       - "env=production"

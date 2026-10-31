@@ -21,7 +21,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/MirajHoque/todo-app/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
 )
 
 // Migrate runs all SQL files in migrationsFS that have not been run yet.

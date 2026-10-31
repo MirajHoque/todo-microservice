@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MirajHoque/todo-app/internal/models"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )

@@ -17,10 +17,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/MirajHoque/todo-app/internal/db"
-	"github.com/MirajHoque/todo-app/internal/logger"
-	"github.com/MirajHoque/todo-app/internal/middleware"
-	"github.com/MirajHoque/todo-app/internal/models"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
 	"github.com/go-chi/chi/v5"
 )
 

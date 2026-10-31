@@ -12,9 +12,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/MirajHoque/todo-app/internal/agents"
-	"github.com/MirajHoque/todo-app/internal/logger"
-	"github.com/MirajHoque/todo-app/internal/middleware"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/agents"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
 )
 
 // AgentHandler handles chat messages routed through the orchestrator.

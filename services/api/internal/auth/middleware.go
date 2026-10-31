@@ -19,8 +19,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/MirajHoque/todo-app/internal/logger"
-	"github.com/MirajHoque/todo-app/internal/middleware"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
 )
 
 // Middleware returns an HTTP middleware that validates JWT tokens.

@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	agentmemory "github.com/MirajHoque/todo-app/internal/agents/memory"
-	"github.com/MirajHoque/todo-app/internal/db"
-	"github.com/MirajHoque/todo-app/internal/logger"
+	agentmemory "github.com/MirajHoque/todo-microservice/services/api/internal/agents/memory"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
 )
 
 const orchestratorAgentName = "orchestrator"

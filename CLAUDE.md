@@ -27,7 +27,11 @@ and the current step. Tick off steps there as they are completed.
 ## Commands
 
 - Build/vet the api: `cd services/api && go build ./... && go vet ./...`
-- Run everything: `make up`
+- Run everything: `make up` (needs `services/api/.env`, copied from `.env.example`)
+- API is served under `/api/v1` on `localhost:8080`
+- Local Postgres: `localhost:5433` from the Mac (5432 is taken by a Postgres
+  installed on the Mac), `postgres:5432` from inside compose. User/password/db: `todo`
+- psql shell: `docker exec -it todo-postgres psql -U todo -d todo`
 
 ## Git
 

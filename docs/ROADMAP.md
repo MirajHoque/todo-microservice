@@ -37,7 +37,7 @@ Routing (via Gateway API): `/` → web, `/api/auth` → auth, `/api/todos` → t
 
 - [ ] **1. Monorepo layout + local stack + Next.js**
   - [x] 1a. Move the Go monolith to `services/api/` (temporary name)
-  - [ ] 1b. Add Postgres to `compose.yaml`
+  - [x] 1b. Add Postgres to `compose.yaml`
   - [ ] 1c. Scaffold `web/` (Next.js) against the existing `/api/...` endpoints
 - [ ] **2. Extract `services/agent` (Python)** — agents-as-tools routing, planner agent, Postgres-backed memory, tools call the API over HTTP
 - [ ] **3. Split `services/api` into `services/auth` + `services/todo`** — database per service, shared code to `libs/go/`

@@ -41,6 +41,20 @@ services:
     env_file:
       - ./services/api/.env
 
+    # `environment` overrides the same key from env_file.
+    # Inside the compose network, Postgres is reachable by its
+    # service name "postgres" — not "localhost". (localhost inside
+    # a container means the container itself.) .env keeps
+    # localhost so `make dev` on your laptop still works.
+    environment:
+      DATABASE_URL: postgres://todo:todo@postgres:5432/todo?sslmode=disable
+
+    # Don't start until Postgres passes its healthcheck — otherwise
+    # the app boots first, can't connect, and crashes.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
     # Logging — use the json-file driver so Docker writes
     # structured logs that Alloy can read
     logging:
@@ -77,3 +91,42 @@ services:
       - "logging=alloy"
       - "service=todo-api"
       - "env=production"
+
+  # ── Postgres ──────────────────────────────────────────────
+  # Local development database. On AKS we use Azure Database for
+  # PostgreSQL instead — this container is only for your laptop.
+  postgres:
+    image: postgres:18-alpine
+    container_name: todo-postgres
+    restart: unless-stopped
+
+    # Local-only credentials — fine to commit because this DB is
+    # never reachable from outside your machine.
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: todo
+
+    # "HOST:CONTAINER" — tools on your laptop (psql, TablePlus,
+    # `make dev`) connect at localhost:5433. Host port 5433 because
+    # a Postgres installed on the Mac already uses 5432. Containers
+    # on the compose network still use postgres:5432.
+    ports:
+      - "5433:5432"
+
+    # Named volume — data survives `docker compose down`.
+    # Wipe it with `docker compose down -v`.
+    # (Postgres 18+ expects the mount at /var/lib/postgresql.)
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+    # pg_isready returns success once Postgres accepts connections.
+    # The api's depends_on waits for this.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d todo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

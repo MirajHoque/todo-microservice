@@ -21,13 +21,16 @@ and the current step. Tick off steps there as they are completed.
 
 - `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
 - `compose.yaml` — runs all services locally; each reads `services/<name>/.env`
-- `Makefile` — `make up`, `make down`, `make svc SERVICE=api CMD=test`
-- `docs/` — roadmap and explanations
+- `Makefile` — `make db`, `make up`, `make down`, `make svc SERVICE=api CMD=test`
+- `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)
 
 ## Commands
 
 - Build/vet the api: `cd services/api && go build ./... && go vet ./...`
-- Run everything: `make up` (needs `services/api/.env`, copied from `.env.example`)
+- Day to day (default): `make db` (only Postgres, in Docker), then
+  `cd services/api && make dev` (needs `services/api/.env`, copied from `.env.example`).
+  The owner runs each service natively; every new service needs a native run path.
+- Run everything in Docker (optional): `make up`
 - API is served under `/api/v1` on `localhost:8080`
 - Local Postgres: `localhost:5433` from the Mac (5432 is taken by a Postgres
   installed on the Mac), `postgres:5432` from inside compose. User/password/db: `todo`

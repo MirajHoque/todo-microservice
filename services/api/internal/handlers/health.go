@@ -6,8 +6,8 @@ import (
 
 	"log/slog"
 
-	"github.com/MirajHoque/todo-app/internal/db"
-	"github.com/MirajHoque/todo-app/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
 )
 
 // HealthReady handles GET /health/ready

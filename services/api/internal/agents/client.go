@@ -45,8 +45,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/MirajHoque/todo-app/internal/agents/memory"
-	"github.com/MirajHoque/todo-app/internal/logger"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/agents/memory"
+	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
 )
 
 // OpenRouterBaseURL is the endpoint for messages.

@@ -1,4 +1,4 @@
-module github.com/MirajHoque/todo-app
+module github.com/MirajHoque/todo-microservice/services/api
 
 go 1.26.3
 

@@ -61,7 +61,7 @@ FROM ${RUNTIME_IMAGE} AS runtime
 ARG VERSION=dev
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="todo-app" \
-  org.opencontainers.image.source="https://github.com/MirajHoque/Todo" \
+  org.opencontainers.image.source="https://github.com/MirajHoque/todo-microservice" \
   org.opencontainers.image.version="${VERSION}" \
   org.opencontainers.image.revision="${REVISION}"
 

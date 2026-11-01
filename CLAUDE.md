@@ -20,21 +20,22 @@ and the current step. Tick off steps there as they are completed.
 ## Layout
 
 - `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
-- `compose.yaml` — runs all services locally; each reads `services/<name>/.env`
-- `Makefile` — `make db`, `make up`, `make down`, `make svc SERVICE=api CMD=test`
+- `compose.yaml` — **parked**: not used or updated until all services exist (see ROADMAP)
+- `Makefile` — `make db`, `make psql`, `make db-stop`, `make svc SERVICE=api CMD=test`
 - `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)
 
 ## Commands
 
 - Build/vet the api: `cd services/api && go build ./... && go vet ./...`
-- Day to day (default): `make db` (only Postgres, in Docker), then
+- Run locally: `make db` (Postgres via plain `docker run`), then
   `cd services/api && make dev` (needs `services/api/.env`, copied from `.env.example`).
-  The owner runs each service natively; every new service needs a native run path.
-- Run everything in Docker (optional): `make up`
+  The owner runs each service natively, one terminal each, to learn how
+  services find each other. Every new service needs its own native run
+  path (`make dev` / `npm run dev`, own `.env`, own port) — don't add it to compose.
 - API is served under `/api/v1` on `localhost:8080`
-- Local Postgres: `localhost:5433` from the Mac (5432 is taken by a Postgres
-  installed on the Mac), `postgres:5432` from inside compose. User/password/db: `todo`
-- psql shell: `docker exec -it todo-postgres psql -U todo -d todo`
+- Local Postgres: `localhost:5433` (5432 is taken by a Postgres installed on
+  the Mac). Container `todo-postgres`, volume `todo-pgdata`. User/password/db: `todo`
+- psql shell: `make psql`
 
 ## Git
 

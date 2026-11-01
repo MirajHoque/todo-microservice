@@ -1,20 +1,40 @@
 # Running locally
 
-There are two ways to run the system on your laptop. Use **mode 1** day to day.
+We run **each service natively on your Mac, one terminal per service**.
+Only Postgres runs in Docker. There is no docker compose in the daily
+workflow (yet). That way you see each service start, read its own
+config, log on its own and find the others by address — which is what
+microservices are about. Compose comes back once all services exist
+(see `docs/ROADMAP.md`).
 
-| | Mode 1: services on your Mac (default) | Mode 2: everything in Docker |
-|---|---|---|
-| Postgres | Docker container | Docker container |
-| Services | Run natively, one terminal each | Containers built by compose |
-| Start | `make db`, then `make dev` per service | `make up` |
-| Good for | Writing code, reading logs, learning how services find each other | Checking that the whole system works together before a PR |
+```
+Terminal 1:  make db                          # Postgres in Docker  → localhost:5433
+Terminal 2:  cd services/api && make dev      # Go api              → localhost:8080
+```
 
-Why the database is in Docker even in mode 1: you don't need Postgres installed
-on your Mac, and everyone gets exactly the same version (`postgres:18-alpine`).
-Only infrastructure (databases, later Redis/Kafka) lives in Docker by default;
-the services we write run natively so you see them start, log and fail.
+More terminals are added as services are split out (web, auth, todo, agent).
 
-## Mode 1: services on your Mac
+## Why Postgres runs in Docker
+
+Postgres is infrastructure, not a service we write. Running it in Docker
+means you don't need it installed on your Mac and everyone gets exactly
+the same version (`postgres:18-alpine`).
+
+`make db` is a plain `docker run` (open the root `Makefile` to read it):
+
+| Flag | What it does |
+|---|---|
+| `--name todo-postgres` | Name the container so we can start/stop it by name |
+| `-e POSTGRES_USER/PASSWORD/DB=todo` | On first start, Postgres creates this user and database |
+| `-p 5433:5432` | Mac port 5433 → container port 5432 (5432 is taken by the Mac's own Postgres) |
+| `-v todo-pgdata:/var/lib/postgresql` | Keep the data in a named volume, so it survives deleting the container |
+| `--health-cmd pg_isready ...` | `docker ps` shows `(healthy)` once Postgres accepts connections |
+| `postgres:18-alpine` | The ready-made image from Docker Hub — no Dockerfile needed |
+
+The first `make db` creates the container (and downloads the image if
+needed). Later runs just `docker start` the existing container.
+
+## Running the api
 
 One-time setup:
 
@@ -25,8 +45,8 @@ cp services/api/.env.example services/api/.env   # then set JWT_SECRET and OPENR
 Every day:
 
 ```bash
-make db                          # Terminal 1: start Postgres, waits until healthy
-cd services/api && make dev      # Terminal 2: run the api on http://localhost:8080
+make db                          # Terminal 1
+cd services/api && make dev      # Terminal 2 → http://localhost:8080
 ```
 
 Check it works:
@@ -40,27 +60,19 @@ You do **not** create tables yourself. Each service runs its own migrations
 (SQL files embedded in the binary) every time it starts and skips the ones
 already applied.
 
-Stop: `Ctrl+C` the service, then `make db-stop` (your data is kept).
+## Stopping and resetting
 
-### How the pieces find each other
+| Command | Effect |
+|---|---|
+| `Ctrl+C` in a service terminal | Stop that service |
+| `make db-stop` | Stop Postgres, keep the data |
+| `make db-reset` | Delete the Postgres container **and all data** (next `make db` starts empty) |
 
-- The Postgres container creates the `todo` user and database on its first
-  start, from `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` in
-  `compose.yaml`.
-- It is published on **localhost:5433** (5432 is taken by the Postgres
-  installed on the Mac). `services/api/.env` points at that address.
+## How the pieces find each other
 
-## Mode 2: everything in Docker
+Every address is configured by hand in each service's `.env`:
 
-```bash
-make up      # builds images, starts Postgres, then the api once Postgres is healthy
-make logs    # tail logs
-make down    # stop (add -v via `docker compose down -v` to wipe the database)
-```
+- api → Postgres: `DATABASE_URL=postgres://todo:todo@localhost:5433/todo`
 
-Inside the compose network services reach each other by service name, so
-`compose.yaml` overrides `DATABASE_URL` to use `postgres:5432` instead of the
-`localhost:5433` in `.env`.
-
-Don't run both modes at once: the native api and the api container both want
-port 8080.
+As more services appear, their `.env` files will point at each other the
+same way (e.g. web → api at `http://localhost:8080`).

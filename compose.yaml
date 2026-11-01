@@ -1,9 +1,12 @@
 # ============================================================
 # compose.yaml
 #
-# Runs every service locally from one command. New services
-# are added here as they are split out of services/api
-# (see docs/ROADMAP.md).
+# PARKED: not used day to day. For now each service runs
+# natively and Postgres starts with `make db` (see
+# docs/LOCAL_DEV.md). This file comes back once all services
+# exist (docs/ROADMAP.md, step 3½).
+#
+# Runs every service locally from one command.
 #
 # Each service reads its own env file: services/<name>/.env
 # (copy services/<name>/.env.example to get started).

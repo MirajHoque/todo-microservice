@@ -10,9 +10,10 @@ microservices are about. Compose comes back once all services exist
 ```
 Terminal 1:  make db                          # Postgres in Docker  → localhost:5433
 Terminal 2:  cd services/api && make dev      # Go api              → localhost:8080
+Terminal 3:  cd web && npm run dev            # Next.js frontend    → localhost:3000
 ```
 
-More terminals are added as services are split out (web, auth, todo, agent).
+More terminals are added as services are split out (auth, todo, agent).
 
 ## Why Postgres runs in Docker
 
@@ -60,6 +61,26 @@ You do **not** create tables yourself. Each service runs its own migrations
 (SQL files embedded in the binary) every time it starts and skips the ones
 already applied.
 
+## Running web (Next.js)
+
+One-time setup:
+
+```bash
+cd web
+cp .env.example .env.local   # sets API_URL=http://localhost:8080
+npm install                  # downloads dependencies into node_modules/
+```
+
+Every day (with Postgres and the api already running):
+
+```bash
+cd web && npm run dev        # Terminal 3 → http://localhost:3000
+```
+
+Check the proxy: `curl localhost:3000/api/v1/todos` should return
+`{"error":"missing authorization header"}`. web forwarded the request
+to the Go api, and that is the api's answer.
+
 ## Stopping and resetting
 
 | Command | Effect |
@@ -70,9 +91,18 @@ already applied.
 
 ## How the pieces find each other
 
-Every address is configured by hand in each service's `.env`:
+Every address is configured by hand in each service's env file:
 
-- api → Postgres: `DATABASE_URL=postgres://todo:todo@localhost:5433/todo`
+| From → To | Setting | File |
+|---|---|---|
+| api → Postgres | `DATABASE_URL=postgres://todo:todo@localhost:5433/todo` | `services/api/.env` |
+| web → api | `API_URL=http://localhost:8080` | `web/.env.local` |
 
-As more services appear, their `.env` files will point at each other the
-same way (e.g. web → api at `http://localhost:8080`).
+The browser only ever talks to web (`localhost:3000`). web forwards
+`/api/...` to `API_URL` (see `web/next.config.ts`).
+
+If one service is down, the others keep running: stop the api and web's
+pages still load, only its `/api/...` calls fail (HTTP 500).
+
+As more services appear, their env files will point at each other the
+same way.

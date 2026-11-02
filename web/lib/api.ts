@@ -61,9 +61,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (!res.ok) {
     // The api sends {"error": "...", "request_id": "..."}. If the api
-    // is down, web itself answers 500 with plain text — handle both.
+    // is down, web's proxy answers 500 with plain text instead — so no
+    // JSON body + a 5xx means "the api did not answer".
     const err = (await res.json().catch(() => null)) as ErrorResponse | null;
-    throw new ApiError(res.status, err?.error ?? res.statusText, err?.request_id);
+    const message =
+      err?.error ?? (res.status >= 500 ? "Cannot reach the api. Is it running?" : res.statusText);
+    throw new ApiError(res.status, message, err?.request_id);
   }
 
   // 204 No Content (e.g. delete) has no body to parse.

@@ -4,7 +4,7 @@
 // Pages call these instead of using fetch() directly, so the
 // details live in one place:
 //   - the base path /api/v1 (forwarded to the Go api by the
-//     rewrite in next.config.ts — see 1c.2)
+//     proxy in proxy.ts)
 //   - JSON encoding/decoding
 //   - attaching the JWT ("Authorization: Bearer <token>")
 //   - turning error responses into an ApiError

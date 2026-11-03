@@ -99,7 +99,7 @@ Every address is configured by hand in each service's env file:
 | web → api | `API_URL=http://localhost:8080` | `web/.env.local` |
 
 The browser only ever talks to web (`localhost:3000`). web forwards
-`/api/...` to `API_URL` (see `web/next.config.ts`).
+`/api/...` to `API_URL` (see `web/proxy.ts`).
 
 If one service is down, the others keep running: stop the api and web's
 pages still load, only its `/api/...` calls fail (HTTP 500).

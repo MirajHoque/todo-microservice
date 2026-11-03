@@ -1,0 +1,19 @@
+# Files Docker should NOT send into the build.
+# Smaller build context = faster builds, and no secrets in images.
+
+# Installed/built inside the image instead
+node_modules
+.next
+out
+
+# Local settings and secrets — never bake these into an image
+.env*
+!.env.example
+
+# Not needed to build
+Dockerfile
+.dockerignore
+README.md
+AGENTS.md
+*.log
+.DS_Store

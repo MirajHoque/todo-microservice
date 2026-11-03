@@ -11,6 +11,9 @@
 // (the API returns the created/updated todo) instead of downloading
 // the whole list again — one request per click.
 //
+// The AI Assistant (components/chat-panel.tsx) can change todos on
+// the server, so after each agent reply we reload the whole list.
+//
 // If the API answers 401, the token is missing or expired: forget
 // it and go to /login.
 // ============================================================
@@ -20,6 +23,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
+import { ChatPanel } from "@/components/chat-panel";
 import { TodoItem } from "@/components/todo-item";
 import { ApiError, createTodo, deleteTodo, listTodos, logout, updateTodo } from "@/lib/api";
 import { clearSession, getEmail, getToken } from "@/lib/session";
@@ -54,16 +58,27 @@ export default function TodosPage() {
     [router],
   );
 
-  // Load the list once when the page opens (or go to /login).
+  // Download the whole list: when the page opens, and after the agent replies.
+  const loadTodos = useCallback(() => {
+    listTodos()
+      .then(setTodos)
+      .catch((err) => handleError(err, "Could not load todos. Is the api running?"));
+  }, [handleError]);
+
+  // On page open: load the list (or go to /login).
   useEffect(() => {
     if (!getToken()) {
       router.replace("/login");
       return;
     }
-    listTodos()
-      .then(setTodos)
-      .catch((err) => handleError(err, "Could not load todos. Is the api running?"));
-  }, [router, handleError]);
+    loadTodos();
+  }, [router, loadTodos]);
+
+  // The chat panel saw a 401 — same as any other expired token.
+  const handleUnauthorized = useCallback(() => {
+    clearSession();
+    router.replace("/login");
+  }, [router]);
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -175,7 +190,7 @@ export default function TodosPage() {
           <div className="py-12 text-center text-zinc-500">
             <div className="mb-2 text-4xl">✓</div>
             <p className="font-medium text-zinc-700">All clear!</p>
-            <p className="text-sm">Add your first todo above.</p>
+            <p className="text-sm">Add your first todo above, or ask the assistant below.</p>
           </div>
         )}
 
@@ -197,6 +212,8 @@ export default function TodosPage() {
             </p>
           </>
         )}
+
+        <ChatPanel onAgentReplied={loadTodos} onUnauthorized={handleUnauthorized} />
       </main>
     </div>
   );

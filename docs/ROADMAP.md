@@ -39,7 +39,7 @@ Routing (via Gateway API): `/` → web, `/api/auth` → auth, `/api/todos` → t
   - [x] 1a. Move the Go monolith to `services/api/` (temporary name)
   - [x] 1b. Add Postgres to `compose.yaml` (later replaced by `make db`, a plain `docker run`; compose is parked)
   - [ ] 1c. Scaffold `web/` (Next.js) against the existing `/api/...` endpoints — runs natively with `npm run dev`
-- [ ] **2. Extract `services/agent` (Python)** — agents-as-tools routing, planner agent, Postgres-backed memory, tools call the API over HTTP
+- [ ] **2. Extract `services/agent` (Python)** — agents-as-tools routing, planner agent, Postgres-backed memory, tools call the API over HTTP. Memory must store full turns *including tool calls and results* — the Go agent stores only text, so on later turns the model thinks it never called its tools (seen in 1c.6)
 - [ ] **3. Split `services/api` into `services/auth` + `services/todo`** — database per service, shared code to `libs/go/`
 - [ ] **3½. Compose for the whole system** — bring `compose.yaml` back (it is parked until now) so every service plus Postgres starts with one command. Until this step each service runs natively in its own terminal (see `docs/LOCAL_DEV.md`).
 - [ ] **4. Local Kubernetes** (kind or k3d) with Kustomize manifests

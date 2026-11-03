@@ -20,6 +20,7 @@ and the current step. Tick off steps there as they are completed.
 ## Layout
 
 - `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
+- `web/` — Next.js frontend (port 3000); forwards `/api/...` to `API_URL` via `web/proxy.ts`
 - `compose.yaml` — **parked**: not used or updated until all services exist (see ROADMAP)
 - `Makefile` — `make db`, `make psql`, `make db-stop`, `make svc SERVICE=api CMD=test`
 - `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)
@@ -32,6 +33,9 @@ and the current step. Tick off steps there as they are completed.
   The owner runs each service natively, one terminal each, to learn how
   services find each other. Every new service needs its own native run
   path (`make dev` / `npm run dev`, own `.env`, own port) — don't add it to compose.
+- Web: `cd web && npm run dev` (needs `web/.env.local`, copied from `.env.example`);
+  check with `npm run lint && npm run build`. Read `web/AGENTS.md` before
+  writing Next.js code — this Next.js version differs from older docs.
 - API is served under `/api/v1` on `localhost:8080`
 - Local Postgres: `localhost:5433` (5432 is taken by a Postgres installed on
   the Mac). Container `todo-postgres`, volume `todo-pgdata`. User/password/db: `todo`

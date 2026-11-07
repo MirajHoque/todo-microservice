@@ -1,0 +1,11 @@
+# Local settings and secrets
+.env
+
+# The virtual environment uv creates (like node_modules) — recreate with `uv sync`
+.venv/
+
+# Python / tool caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/

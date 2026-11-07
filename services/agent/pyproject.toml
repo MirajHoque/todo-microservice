@@ -1,0 +1,43 @@
+# ============================================================
+# pyproject.toml — the agent service's project file.
+#
+# Python's equivalent of go.mod: name, Python version and
+# dependencies. uv.lock pins the exact versions (like go.sum).
+#
+#   uv sync          → install everything into .venv/
+#   uv add <pkg>     → add a dependency (updates both files)
+#   uv run <cmd>     → run a command inside .venv/
+# ============================================================
+
+[project]
+name = "agent"
+version = "0.1.0"
+description = "Agent service: the AI assistant (orchestrator + agents) for the todo app"
+requires-python = ">=3.15"
+dependencies = [
+    "fastapi>=0.162.0",            # web framework (like chi in the Go api)
+    "pydantic-settings>=2.16.2",   # typed config from environment / .env
+    "uvicorn[standard]>=0.54.0",   # the HTTP server that runs FastAPI
+]
+
+[dependency-groups]
+# Only needed while developing — not installed in the Docker image.
+dev = [
+    "httpx2>=2.16.0",  # used by FastAPI's TestClient
+    "pytest>=9.2.0",   # tests
+    "ruff>=0.17.3",    # linter + formatter (like go vet + gofmt)
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E/F: errors, I: sorted imports, UP: modern syntax, B: likely bugs
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

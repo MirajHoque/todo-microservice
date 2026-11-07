@@ -11,9 +11,11 @@ microservices are about. Compose comes back once all services exist
 Terminal 1:  make db                          # Postgres in Docker  → localhost:5433
 Terminal 2:  cd services/api && make dev      # Go api              → localhost:8080
 Terminal 3:  cd web && npm run dev            # Next.js frontend    → localhost:3000
+Terminal 4:  cd services/agent && make dev    # Python agent        → localhost:8083 (step 2, in progress)
 ```
 
-More terminals are added as services are split out (auth, todo, agent).
+More terminals are added as services are split out (auth, todo).
+First-time setup for each service is in its own README.
 
 ## Why Postgres runs in Docker
 

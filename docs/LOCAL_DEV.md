@@ -37,6 +37,23 @@ the same version (`postgres:18-alpine`).
 The first `make db` creates the container (and downloads the image if
 needed). Later runs just `docker start` the existing container.
 
+### One server, one database per service
+
+After Postgres is up, `make db` also runs `db/init.sql` (safe to repeat):
+
+| Service | Database | User | psql shell |
+|---|---|---|---|
+| api (Go) | `todo` | `todo` | `make psql` |
+| agent (Python) | `agent_db` (+ `agent_db_test`) | `agent` | `make psql-agent` |
+
+Each user can only connect to its own database — the agent literally
+cannot read the `todos` table, it has to ask the api over HTTP
+(ROADMAP rule 3: one owner per table). Tables are created by each
+service's migrations when it starts, not by `db/init.sql`.
+
+(The `todo` user is a superuser because the Postgres image makes its
+first user one — fine locally; step 3 gives the Go services normal users.)
+
 ## Running the api
 
 One-time setup:
@@ -98,6 +115,7 @@ Every address is configured by hand in each service's env file:
 | From → To | Setting | File |
 |---|---|---|
 | api → Postgres | `DATABASE_URL=postgres://todo:todo@localhost:5433/todo` | `services/api/.env` |
+| agent → Postgres | `DATABASE_URL=postgresql://agent:agent@localhost:5433/agent_db` | `services/agent/.env` |
 | web → api | `API_URL=http://localhost:8080` | `web/.env.local` |
 
 The browser only ever talks to web (`localhost:3000`). web forwards

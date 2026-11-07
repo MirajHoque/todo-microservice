@@ -40,8 +40,11 @@ and the current step. Tick off steps there as they are completed.
   writing Next.js code — this Next.js version differs from older docs.
 - API is served under `/api/v1` on `localhost:8080`
 - Local Postgres: `localhost:5433` (5432 is taken by a Postgres installed on
-  the Mac). Container `todo-postgres`, volume `todo-pgdata`. User/password/db: `todo`
-- psql shell: `make psql`
+  the Mac). Container `todo-postgres`, volume `todo-pgdata`. One database + user
+  per service, created by `make db` from `db/init.sql`: api → `todo`/`todo`,
+  agent → `agent_db` (+ `agent_db_test`) / `agent`. Users can't connect to
+  other services' databases.
+- psql shell: `make psql` (todo), `make psql-agent` (agent_db)
 
 ## Git
 

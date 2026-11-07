@@ -16,6 +16,7 @@ description = "Agent service: the AI assistant (orchestrator + agents) for the t
 requires-python = ">=3.15"
 dependencies = [
     "fastapi>=0.162.0",            # web framework (like chi in the Go api)
+    "psycopg[binary,pool]>=3.3.8", # Postgres driver + connection pool (like pgx/pgxpool)
     "pydantic-settings>=2.16.2",   # typed config from environment / .env
     "uvicorn[standard]>=0.54.0",   # the HTTP server that runs FastAPI
 ]

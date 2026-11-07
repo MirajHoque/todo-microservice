@@ -1,7 +1,11 @@
 """main.py — builds the FastAPI app.
 
 Like the router setup in services/api/cmd/server/main.go:
-config → logging → middleware → routes.
+config → logging → (on start: database) → middleware → routes.
+
+`lifespan` runs code once when the server starts (before the first
+request) and once when it stops: open the database pool, then
+close it cleanly on shutdown (Ctrl+C / SIGTERM).
 
 Every request goes through `request_context` (middleware):
   1. take X-Request-ID from the caller, or make a new one
@@ -18,6 +22,8 @@ Errors use the same JSON shape as the Go api,
 
 import time
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -25,10 +31,23 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from agent.config import get_settings
+from agent.db import open_pool
 from agent.log import get_logger, request_id_var, setup_logging
+from agent.migrate import migrate
 from agent.routes import health
 
 log = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # ── startup ──
+    app.state.pool = await open_pool(get_settings())
+    await migrate(app.state.pool)  # create/update tables before serving
+    yield  # ← the server handles requests while we're paused here
+    # ── shutdown ──
+    await app.state.pool.close()
+    log.info("server stopped cleanly")
 
 
 def create_app() -> FastAPI:
@@ -37,6 +56,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="agent",
+        lifespan=lifespan,
         # Interactive API docs at /docs, only while developing.
         docs_url="/docs" if settings.env == "development" else None,
         redoc_url=None,

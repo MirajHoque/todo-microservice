@@ -18,6 +18,7 @@ dependencies = [
     "fastapi>=0.162.0",            # web framework (like chi in the Go api)
     "psycopg[binary,pool]>=3.3.8", # Postgres driver + connection pool (like pgx/pgxpool)
     "pydantic-settings>=2.16.2",   # typed config from environment / .env
+    "pyjwt>=2.15.1",               # verify the JWTs the api issues (like golang-jwt)
     "uvicorn[standard]>=0.54.0",   # the HTTP server that runs FastAPI
 ]
 
@@ -42,3 +43,4 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]  # lets tests do `from helpers import ...`

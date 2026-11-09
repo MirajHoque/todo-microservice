@@ -11,6 +11,7 @@ Same idea as services/api/internal/config/config.go.
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,14 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://agent:agent@localhost:5433/agent_db"
     db_min_conns: int = 1
     db_max_conns: int = 5
+
+    # Auth — the SAME secret the api signs tokens with (HS256, shared
+    # secret; see ROADMAP "Auth"). No default on purpose: without it the
+    # service refuses to start instead of accepting forged tokens.
+    # At least 32 characters: a short secret can be brute-forced, and
+    # then anyone can forge tokens. (`openssl rand -base64 32` → 44.)
+    jwt_secret: str = Field(min_length=32)
+    jwt_issuer: str = "todo-app"  # the api sets iss="todo-app"
 
     # Logging
     log_level: Literal["debug", "info", "warning", "error"] = "info"

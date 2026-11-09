@@ -2,21 +2,25 @@
 
 Tests that need a database use the separate `agent_db_test` database
 (created by `make db`), never your real `agent_db`. We point
-DATABASE_URL at it *before* the app is imported, so the app's
-settings pick it up (environment variables beat the .env file).
+DATABASE_URL (and a test-only JWT_SECRET) at test values *before*
+the app is imported, so the app's settings pick them up
+(environment variables beat the .env file).
 
 If Postgres isn't running, database tests are skipped with a hint
-instead of failing.
+instead of failing. Token helpers live in helpers.py.
 """
 
 import os
+
+from helpers import TEST_JWT_SECRET
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql://agent:agent@localhost:5433/agent_db_test"
 )
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["JWT_SECRET"] = TEST_JWT_SECRET
 
-import psycopg  # noqa: E402  (imports after setting the env var, on purpose)
+import psycopg  # noqa: E402  (imports after setting the env vars, on purpose)
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 

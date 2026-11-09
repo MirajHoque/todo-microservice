@@ -6,7 +6,8 @@ memory (`agent_db`), and call the api's HTTP endpoints for todos.
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
-- Status: 2b — health checks + its own database. Chat still runs in the Go api until 2f.
+- Status: 2c — health checks, own database, JWT auth, conversation endpoints.
+  Chat still runs in the Go api until 2f.
 
 ## Run it
 
@@ -16,7 +17,7 @@ service's user and databases.
 
 ```bash
 cd services/agent
-cp .env.example .env   # first time only
+cp .env.example .env   # first time only — then set JWT_SECRET (see "Auth" below)
 make install           # first time only — creates .venv/ from uv.lock
 make dev               # http://localhost:8083, restarts when you save a file
 ```
@@ -26,6 +27,37 @@ Check:
 - `curl localhost:8083/health/ready` → `"status":"ready"` (database reachable; 503 if not)
 
 While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
+
+## Endpoints
+
+| Method + path | Auth | What it does |
+|---|---|---|
+| `GET /health` | — | Liveness: the process is up |
+| `GET /health/ready` | — | Readiness: the database answers (503 if not) |
+| `GET /api/v1/agent/conversation` | JWT | Your saved chat messages, oldest first |
+| `DELETE /api/v1/agent/conversation` | JWT | Forget your conversation (204) |
+
+`POST /api/v1/agent/chat` arrives in step 2e.
+
+## Auth
+
+This service has no users and never sees passwords. The api issues a JWT
+at login; this service only **verifies** it (`src/agent/auth.py`):
+signature (shared `JWT_SECRET`), algorithm HS256 only, not expired,
+issuer `todo-app`, and reads `user_id` from it. Errors match the Go api:
+`missing authorization header`, `authorization header must be: Bearer <token>`,
+`token is invalid`, `token has expired` (all 401).
+
+`JWT_SECRET` in `.env` **must be the same value** as in `services/api/.env`,
+and at least 32 characters — otherwise the service refuses to start. Copy it
+without printing it:
+
+```bash
+grep '^JWT_SECRET=' ../api/.env >> .env   # then delete the placeholder line
+```
+
+(Later, in the RS256 step, only the auth service will hold a private key
+and this service will need just the public key.)
 
 ## Its database
 
@@ -39,7 +71,8 @@ While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
 | psql shell | `make psql-agent` (repo root) |
 
 `user_id` in `conversations` has no foreign key: users belong to another
-service. The id comes from the user's JWT (step 2c).
+service. The id comes from the caller's verified JWT — never from the URL
+or body — so a user can only reach their own conversation.
 
 To change the schema, **add** a new file (`003_...sql`) — never edit one
 that has already run.
@@ -66,10 +99,13 @@ that has already run.
 | `src/agent/config.py` | Settings from env / `.env` |
 | `src/agent/log.py` | JSON logs with the same field names as the Go api |
 | `src/agent/db.py` | Database connection pool; `Pool` dependency for routes |
+| `src/agent/auth.py` | JWT check; `CurrentUser` dependency → the caller's user id |
+| `src/agent/memory.py` | SQL for conversations/messages (read, clear) |
 | `src/agent/migrate.py` | Applies `migrations/*.sql` at startup |
 | `src/agent/migrations/` | Numbered SQL files (the schema, step by step) |
-| `src/agent/routes/` | HTTP handlers (`health.py`: `/health`, `/health/ready`) |
-| `tests/conftest.py` | Shared test setup: uses `agent_db_test`, skips DB tests if Postgres is down |
+| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py` |
+| `tests/conftest.py` | Shared test setup: uses `agent_db_test` + a test JWT secret; skips DB tests if Postgres is down |
+| `tests/helpers.py` | `make_token()` / `auth()` to build good and bad tokens in tests |
 | `tests/` | Tests, run in-process with FastAPI's TestClient |
 
 ## Conventions shared with the other services

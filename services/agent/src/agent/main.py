@@ -24,6 +24,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -34,7 +35,7 @@ from agent.config import get_settings
 from agent.db import open_pool
 from agent.log import get_logger, request_id_var, setup_logging
 from agent.migrate import migrate
-from agent.routes import health
+from agent.routes import conversation, health
 
 log = get_logger(__name__)
 
@@ -94,7 +95,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
         # 404 unknown path, 405 wrong method, raise HTTPException(401, ...) …
-        return error_response(exc.status_code, str(exc.detail).lower())
+        message = str(exc.detail)
+        if message == HTTPStatus(exc.status_code).phrase:
+            message = message.lower()  # FastAPI's own "Not Found" → "not found", like Go
+        return error_response(exc.status_code, message)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -110,6 +114,7 @@ def create_app() -> FastAPI:
         return error_response(500, "internal server error")
 
     app.include_router(health.router)
+    app.include_router(conversation.router)
 
     log.info("starting agent", extra={"addr": f"{settings.host}:{settings.port}"})
     return app

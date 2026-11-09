@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 SERVICE = "agent"
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)  # set by auth.py
 
 # Attributes every LogRecord has. Anything else came from extra={...}.
 _STANDARD = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime", "taskName"}
@@ -41,6 +42,8 @@ class JSONFormatter(logging.Formatter):
         }
         if request_id := request_id_var.get():
             entry["request_id"] = request_id
+        if user_id := user_id_var.get():
+            entry["user_id"] = user_id
         # Fields passed as log.info("...", extra={"user_id": ...})
         entry.update({k: v for k, v in record.__dict__.items() if k not in _STANDARD})
         if record.exc_info:

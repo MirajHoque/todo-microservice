@@ -16,6 +16,7 @@ description = "Agent service: the AI assistant (orchestrator + agents) for the t
 requires-python = ">=3.15"
 dependencies = [
     "fastapi>=0.162.0",            # web framework (like chi in the Go api)
+    "httpx2>=2.16.0",              # HTTP client: calls the api (and the TestClient uses it)
     "psycopg[binary,pool]>=3.3.8", # Postgres driver + connection pool (like pgx/pgxpool)
     "pydantic-settings>=2.16.2",   # typed config from environment / .env
     "pyjwt>=2.15.1",               # verify the JWTs the api issues (like golang-jwt)
@@ -25,7 +26,6 @@ dependencies = [
 [dependency-groups]
 # Only needed while developing — not installed in the Docker image.
 dev = [
-    "httpx2>=2.16.0",  # used by FastAPI's TestClient
     "pytest>=9.2.0",   # tests
     "ruff>=0.17.3",    # linter + formatter (like go vet + gofmt)
 ]

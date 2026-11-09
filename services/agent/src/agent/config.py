@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(min_length=32)
     jwt_issuer: str = "todo-app"  # the api sets iss="todo-app"
 
+    # The api service that owns todos. The agent never touches the
+    # todos table — its tools call this over HTTP, as the user.
+    api_url: str = "http://localhost:8080"
+    api_timeout_seconds: float = 10.0
+
     # Logging
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     log_format: Literal["json", "text"] = "json"

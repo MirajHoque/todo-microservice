@@ -3,7 +3,7 @@
 GET    /api/v1/agent/conversation → the saved messages (oldest first)
 DELETE /api/v1/agent/conversation → forget them (called on logout, 2f)
 
-Both need a valid JWT: `user_id: CurrentUser` makes FastAPI run the
+Both need a valid JWT: `caller: CurrentUser` makes FastAPI run the
 token check (auth.py) before the handler. No token → 401, and the
 handler never runs. The user id comes from the token, never from the
 URL or body — so nobody can read someone else's conversation.
@@ -34,8 +34,8 @@ class ConversationResponse(BaseModel):
 
 
 @router.get("/conversation")
-async def get_conversation(user_id: CurrentUser, pool: Pool) -> ConversationResponse:
-    rows = await memory.get_messages(pool, user_id)
+async def get_conversation(caller: CurrentUser, pool: Pool) -> ConversationResponse:
+    rows = await memory.get_messages(pool, caller.user_id)
     return ConversationResponse(
         messages=[
             Message(
@@ -49,7 +49,7 @@ async def get_conversation(user_id: CurrentUser, pool: Pool) -> ConversationResp
 
 
 @router.delete("/conversation", status_code=204)
-async def delete_conversation(user_id: CurrentUser, pool: Pool) -> Response:
-    deleted = await memory.clear(pool, user_id)
+async def delete_conversation(caller: CurrentUser, pool: Pool) -> Response:
+    deleted = await memory.clear(pool, caller.user_id)
     log.info("conversation cleared", extra={"action": "memory_clear", "deleted": deleted})
     return Response(status_code=204)  # 204 No Content — like DELETE in the api

@@ -117,6 +117,7 @@ Every address is configured by hand in each service's env file:
 | api → Postgres | `DATABASE_URL=postgres://todo:todo@localhost:5433/todo` | `services/api/.env` |
 | agent → Postgres | `DATABASE_URL=postgresql://agent:agent@localhost:5433/agent_db` | `services/agent/.env` |
 | web → api | `API_URL=http://localhost:8080` | `web/.env.local` |
+| agent → api | `API_URL=http://localhost:8080` (todo tools, with the user's JWT) | `services/agent/.env` |
 
 The browser only ever talks to web (`localhost:3000`). web forwards
 `/api/...` to `API_URL` (see `web/proxy.ts`).

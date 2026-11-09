@@ -6,7 +6,8 @@ memory (`agent_db`), and call the api's HTTP endpoints for todos.
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
-- Status: 2c — health checks, own database, JWT auth, conversation endpoints.
+- Status: 2d — health checks, own database, JWT auth, conversation endpoints,
+  client for the api's todo endpoints.
   Chat still runs in the Go api until 2f.
 
 ## Run it
@@ -38,6 +39,21 @@ While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
 | `DELETE /api/v1/agent/conversation` | JWT | Forget your conversation (204) |
 
 `POST /api/v1/agent/chat` arrives in step 2e.
+
+## Calling the api (todos)
+
+The `todos` table belongs to the api service; this service can't even
+connect to that database. Its tools change todos through the api's HTTP
+endpoints, via `src/agent/todo_client.py` (`API_URL`, default
+`http://localhost:8080`):
+
+| Header sent | Why |
+|---|---|
+| `Authorization: Bearer <the user's JWT>` | The agent acts **as the user**, with no extra power — the api checks ownership exactly as for web, so even a tricked LLM can only touch this user's todos |
+| `X-Request-ID: <same id>` | One chat message can be followed through both services' logs |
+
+Api errors come back as `TodoAPIError(status, message)` with the api's own
+message ("todo not found", …); api down → 503, too slow → 504.
 
 ## Auth
 
@@ -83,7 +99,7 @@ that has already run.
 |---|---|---|
 | `make install` | Install dependencies into `.venv/` | `go mod download` |
 | `make dev` | Run with auto-reload | `make dev` (`go run`) |
-| `make test` | Run tests (`pytest`; database tests need `make db`, else skipped) | `go test ./...` |
+| `make test` | Run tests (`pytest`; DB tests need `make db`, real-api tests need the api running — else skipped) | `go test ./...` |
 | `make lint` | Lint + format check (`ruff`) | `go vet` + `gofmt -l` |
 | `make fmt` | Fix formatting | `gofmt -w` |
 
@@ -101,6 +117,7 @@ that has already run.
 | `src/agent/db.py` | Database connection pool; `Pool` dependency for routes |
 | `src/agent/auth.py` | JWT check; `CurrentUser` dependency → the caller's user id |
 | `src/agent/memory.py` | SQL for conversations/messages (read, clear) |
+| `src/agent/todo_client.py` | HTTP client for the api's todo endpoints, as the user |
 | `src/agent/migrate.py` | Applies `migrations/*.sql` at startup |
 | `src/agent/migrations/` | Numbered SQL files (the schema, step by step) |
 | `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py` |

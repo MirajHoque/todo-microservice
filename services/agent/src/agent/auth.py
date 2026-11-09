@@ -16,10 +16,13 @@ is genuine and reads the user id from it:
 Same checks and the same 401 messages as the Go api's middleware
 (services/api/internal/auth), so clients see one behaviour.
 
-Routes use it by declaring a parameter `user_id: CurrentUser`.
+Routes use it by declaring a parameter `caller: CurrentUser`.
 FastAPI runs `current_user` first; if it raises, the route never runs.
+`caller.user_id` says who it is; `caller.token` is kept so the agent
+can call the api *as this user* (see todo_client.py).
 """
 
+from dataclasses import dataclass
 from typing import Annotated
 
 import jwt
@@ -36,6 +39,12 @@ ALGORITHMS = ["HS256"]  # what the api signs with — accept nothing else
 # auto_error=False: we do the checks ourselves below, to keep the
 # api's exact error messages.
 bearer_scheme = HTTPBearer(auto_error=False, description="Paste the JWT from /auth/login")
+
+
+@dataclass(frozen=True)  # a small read-only record (like a Go struct)
+class Caller:
+    user_id: str  # from the verified token
+    token: str  # the raw JWT, forwarded when the agent calls the api
 
 
 class AuthError(Exception):
@@ -70,8 +79,8 @@ async def current_user(
     # Authorize button (bearer_scheme) already fills it in.
     authorization: Annotated[str | None, Header(include_in_schema=False)] = None,
     _docs: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
-) -> str:
-    """FastAPI dependency: the caller's user id, or a 401.
+) -> Caller:
+    """FastAPI dependency: who is calling (user id + token), or a 401.
 
     `async def` (even though nothing here waits) so it runs in the same
     context as the route: the user_id_var set below is then visible to
@@ -93,8 +102,8 @@ async def current_user(
         raise HTTPException(401, str(exc)) from None
 
     user_id_var.set(user_id)  # every log line of this request gets user_id
-    return user_id
+    return Caller(user_id=user_id, token=token)
 
 
-# Use in a route:  async def handler(user_id: CurrentUser): ...
-CurrentUser = Annotated[str, Depends(current_user)]
+# Use in a route:  async def handler(caller: CurrentUser): ...
+CurrentUser = Annotated[Caller, Depends(current_user)]

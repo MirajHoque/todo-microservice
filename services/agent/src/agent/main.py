@@ -4,8 +4,9 @@ Like the router setup in services/api/cmd/server/main.go:
 config → logging → (on start: database) → middleware → routes.
 
 `lifespan` runs code once when the server starts (before the first
-request) and once when it stops: open the database pool, then
-close it cleanly on shutdown (Ctrl+C / SIGTERM).
+request) and once when it stops: open the database pool and the
+HTTP client used to call the api, then close both cleanly on
+shutdown (Ctrl+C / SIGTERM).
 
 Every request goes through `request_context` (middleware):
   1. take X-Request-ID from the caller, or make a new one
@@ -26,6 +27,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 
+import httpx2
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -36,17 +38,24 @@ from agent.db import open_pool
 from agent.log import get_logger, request_id_var, setup_logging
 from agent.migrate import migrate
 from agent.routes import conversation, health
+from agent.todo_client import TodoClient
 
 log = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
     # ── startup ──
-    app.state.pool = await open_pool(get_settings())
+    app.state.pool = await open_pool(settings)
     await migrate(app.state.pool)  # create/update tables before serving
+    # One shared HTTP client for the whole service: it keeps connections
+    # to the api open and reuses them (like a database pool, for HTTP).
+    app.state.http = httpx2.AsyncClient(timeout=settings.api_timeout_seconds)
+    app.state.todos = TodoClient(app.state.http, settings.api_url)
     yield  # ← the server handles requests while we're paused here
     # ── shutdown ──
+    await app.state.http.aclose()
     await app.state.pool.close()
     log.info("server stopped cleanly")
 

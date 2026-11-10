@@ -87,8 +87,8 @@ def _seed_conversation(database_url: str, user_id: str, text: str) -> None:
             "INSERT INTO conversations (user_id) VALUES (%s) RETURNING id", (user_id,)
         ).fetchone()[0]
         conn.execute(
-            "INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'user', %s)",
-            (conv, Jsonb([{"type": "text", "text": text}])),
+            "INSERT INTO messages (conversation_id, role, message) VALUES (%s, 'user', %s)",
+            (conv, Jsonb({"role": "user", "content": text})),
         )
 
 
@@ -98,7 +98,7 @@ def test_users_are_isolated(db_client, database_url):
 
     alice_view = db_client.get(URL, headers=auth(make_token(alice))).json()
     bob_view = db_client.get(URL, headers=auth(make_token(bob))).json()
-    assert alice_view["messages"][0]["content"][0]["text"] == "alice's secret plan"
+    assert alice_view["messages"][0]["message"]["content"] == "alice's secret plan"
     assert bob_view == {"messages": []}
 
     # Bob deleting "his" conversation must not touch Alice's.

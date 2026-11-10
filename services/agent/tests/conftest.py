@@ -2,7 +2,7 @@
 
 Tests that need a database use the separate `agent_db_test` database
 (created by `make db`), never your real `agent_db`. We point
-DATABASE_URL (and a test-only JWT_SECRET) at test values *before*
+DATABASE_URL (and test-only JWT_SECRET / OPENROUTER_API_KEY) at test values *before*
 the app is imported, so the app's settings pick them up
 (environment variables beat the .env file).
 
@@ -19,6 +19,7 @@ TEST_DATABASE_URL = os.environ.get(
 )
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["JWT_SECRET"] = TEST_JWT_SECRET
+os.environ["OPENROUTER_API_KEY"] = "test-key-never-used"  # tests use a fake LLM
 
 import psycopg  # noqa: E402  (imports after setting the env vars, on purpose)
 import pytest  # noqa: E402

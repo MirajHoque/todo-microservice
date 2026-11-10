@@ -4,9 +4,9 @@ Like the router setup in services/api/cmd/server/main.go:
 config → logging → (on start: database) → middleware → routes.
 
 `lifespan` runs code once when the server starts (before the first
-request) and once when it stops: open the database pool and the
-HTTP client used to call the api, then close both cleanly on
-shutdown (Ctrl+C / SIGTERM).
+request) and once when it stops: open the database pool, the
+HTTP client used to call the api and the LLM client, then close
+them cleanly on shutdown (Ctrl+C / SIGTERM).
 
 Every request goes through `request_context` (middleware):
   1. take X-Request-ID from the caller, or make a new one
@@ -27,6 +27,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 
+import httpx
 import httpx2
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -35,9 +36,10 @@ from starlette.exceptions import HTTPException
 
 from agent.config import get_settings
 from agent.db import open_pool
+from agent.llm import create_llm
 from agent.log import get_logger, request_id_var, setup_logging
 from agent.migrate import migrate
-from agent.routes import conversation, health
+from agent.routes import chat, conversation, health
 from agent.todo_client import TodoClient
 
 log = get_logger(__name__)
@@ -53,8 +55,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # to the api open and reuses them (like a database pool, for HTTP).
     app.state.http = httpx2.AsyncClient(timeout=settings.api_timeout_seconds)
     app.state.todos = TodoClient(app.state.http, settings.api_url)
+    # The LLM client (OpenRouter SDK) gets its own httpx client — the SDK
+    # is built on httpx; our api calls use httpx2.
+    app.state.llm_http = httpx.AsyncClient()
+    app.state.llm = create_llm(settings, app.state.llm_http)
     yield  # ← the server handles requests while we're paused here
     # ── shutdown ──
+    await app.state.llm_http.aclose()
     await app.state.http.aclose()
     await app.state.pool.close()
     log.info("server stopped cleanly")
@@ -124,6 +131,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(conversation.router)
+    app.include_router(chat.router)
 
     log.info("starting agent", extra={"addr": f"{settings.host}:{settings.port}"})
     return app

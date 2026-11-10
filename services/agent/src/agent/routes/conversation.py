@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 
 
 class Message(BaseModel):
-    role: str  # "user" | "assistant"
-    content: list[dict[str, Any]]  # content blocks: text, tool_use, tool_result
+    role: str  # "user" | "assistant" | "tool"
+    message: dict[str, Any]  # the full message in OpenRouter's chat format
     created_at: str
 
 
@@ -40,7 +40,7 @@ async def get_conversation(caller: CurrentUser, pool: Pool) -> ConversationRespo
         messages=[
             Message(
                 role=r["role"],
-                content=r["content"],
+                message=r["message"],
                 created_at=memory.as_timestamp(r["created_at"]),
             )
             for r in rows

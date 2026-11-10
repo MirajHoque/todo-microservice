@@ -60,19 +60,51 @@ def test_failed_migration_rolls_back_everything(database_url, tmp_path: Path):
         assert recorded == 0
 
 
-def test_messages_store_full_content_blocks(db_client, database_url):
-    # The 1c.6 fix: tool calls are stored as JSON, not thrown away.
-    blocks = [{"type": "tool_use", "id": "t1", "name": "create_todo", "input": {"title": "milk"}}]
+def test_messages_store_the_whole_message(db_client, database_url):
+    # The 1c.6 fix: tool calls (and reasoning) are stored as JSON, not thrown away.
+    msg = {
+        "role": "assistant",
+        "content": "Adding it.",
+        "tool_calls": [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "create_todo", "arguments": '{"title": "milk"}'},
+            }
+        ],
+        "reasoning_details": [{"type": "reasoning.encrypted", "data": "abc", "index": 0}],
+    }
     with psycopg.connect(database_url) as conn:
         conv_id = conn.execute(
             "INSERT INTO conversations (user_id) VALUES (gen_random_uuid()) RETURNING id"
         ).fetchone()[0]
         conn.execute(
-            "INSERT INTO messages (conversation_id, role, content) VALUES (%s, 'assistant', %s)",
-            (conv_id, psycopg.types.json.Jsonb(blocks)),
+            "INSERT INTO messages (conversation_id, role, message) VALUES (%s, 'assistant', %s)",
+            (conv_id, psycopg.types.json.Jsonb(msg)),
         )
-        stored = conn.execute("SELECT content FROM messages WHERE conversation_id = %s", (conv_id,))
-        assert stored.fetchone()[0] == blocks  # comes back exactly as saved
+        stored = conn.execute("SELECT message FROM messages WHERE conversation_id = %s", (conv_id,))
+        assert stored.fetchone()[0] == msg  # comes back exactly as saved
+
+
+def test_tool_role_is_allowed(db_client, database_url):
+    # Migration 003: tool results are their own messages (role "tool").
+    with psycopg.connect(database_url) as conn:
+        conv_id = conn.execute(
+            "INSERT INTO conversations (user_id) VALUES (gen_random_uuid()) RETURNING id"
+        ).fetchone()[0]
+        tool_msg = {"role": "tool", "tool_call_id": "call_1", "content": "ok"}
+        conn.execute(
+            "INSERT INTO messages (conversation_id, role, message) VALUES (%s, 'tool', %s)",
+            (conv_id, psycopg.types.json.Jsonb(tool_msg)),
+        )
+        try:
+            conn.execute(
+                "INSERT INTO messages (conversation_id, role, message) VALUES (%s, 'robot', '{}')",
+                (conv_id,),
+            )
+            raise AssertionError("unknown roles must be rejected")
+        except psycopg.errors.CheckViolation:
+            pass
 
 
 def test_one_conversation_per_user(db_client, database_url):

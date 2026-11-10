@@ -6,9 +6,8 @@ memory (`agent_db`), and call the api's HTTP endpoints for todos.
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
-- Status: 2d — health checks, own database, JWT auth, conversation endpoints,
-  client for the api's todo endpoints.
-  Chat still runs in the Go api until 2f.
+- Status: 2e — the todo agent works here (`POST /api/v1/agent/chat`).
+  web still sends chat to the Go api until 2f.
 
 ## Run it
 
@@ -37,8 +36,48 @@ While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
 | `GET /health/ready` | — | Readiness: the database answers (503 if not) |
 | `GET /api/v1/agent/conversation` | JWT | Your saved chat messages, oldest first |
 | `DELETE /api/v1/agent/conversation` | JWT | Forget your conversation (204) |
+| `POST /api/v1/agent/chat` | JWT | `{"message": "..."}` → `{"reply": "..."}` (same contract as the Go api) |
 
-`POST /api/v1/agent/chat` arrives in step 2e.
+Chat errors: `400 message is required`, `409 still answering your previous message`
+(one message at a time per user), `502 agent failed to respond` (the LLM failed).
+
+## The agent (`src/agent/todo_agent.py`)
+
+Any tool-calling model, through **OpenRouter** (official `openrouter` SDK, OpenRouter's
+unified chat format — not tied to one provider), with four tools: `list_todos`,
+`create_todo`, `complete_todo`, `delete_todo`. One chat message runs this loop:
+
+1. send the stored conversation + the new message + the tool definitions
+2. the answer has `tool_calls` → run every requested tool (several at once if
+   asked), add one `{"role": "tool", "tool_call_id": ...}` message per result
+   (failures as text starting with `error:`), repeat
+3. no tool calls → its text is the reply. At most `AGENT_MAX_STEPS` LLM calls.
+
+Every message is saved the moment it exists, **append-only**, exactly as sent or
+received — including `tool_calls` and `reasoning_details` — so on the next message
+the model sees what it really did. The tools call the api as the user (below).
+
+### Switching models / providers
+
+Set `AGENT_MODEL` in `.env` to any id from https://openrouter.ai/models that
+supports tools, and restart. No code changes. Tested:
+
+| `AGENT_MODEL` | Provider | ≈ cost per message |
+|---|---|---|
+| `anthropic/claude-sonnet-5.5` (default) | Anthropic | ~1 cent |
+| `google/gemini-2.5-flash` | Google | ~0.07 cent |
+
+Each `llm call` log line shows the `model` that answered and its `cost_usd`.
+
+### LLM settings (`.env`)
+
+| Setting | Default | Notes |
+|---|---|---|
+| `OPENROUTER_API_KEY` | — (required) | Copy from `services/api/.env` without printing it: `grep '^OPENROUTER_API_KEY=' ../api/.env >> .env` |
+| `AGENT_MODEL` | `anthropic/claude-sonnet-5.5` | Any OpenRouter model id |
+| `LLM_MAX_TOKENS` | 16000 | OpenRouter reserves credit for this maximum — lower it if you get a 402 "requires more credits" |
+| `LLM_RETRY_SECONDS` | 10 | The SDK retries 5xx/network errors; its own default is one hour |
+| `AGENT_MAX_STEPS` | 10 | Max LLM calls per chat message |
 
 ## Calling the api (todos)
 
@@ -82,7 +121,7 @@ and this service will need just the public key.)
 | Database | `agent_db` (tests use `agent_db_test`) |
 | User | `agent` / `agent` — can't connect to any other service's database |
 | Created by | `make db` / `make db-init` in the repo root (`db/init.sql`) |
-| Tables | `conversations` (one per user), `messages` (full content blocks as JSONB, tool calls included) |
+| Tables | `conversations` (one per user), `messages` (one whole message per row, OpenRouter chat format as JSONB — tool calls and results included) |
 | Schema changes | SQL files in `src/agent/migrations/`, applied automatically at startup |
 | psql shell | `make psql-agent` (repo root) |
 
@@ -116,13 +155,16 @@ that has already run.
 | `src/agent/log.py` | JSON logs with the same field names as the Go api |
 | `src/agent/db.py` | Database connection pool; `Pool` dependency for routes |
 | `src/agent/auth.py` | JWT check; `CurrentUser` dependency → the caller's user id |
-| `src/agent/memory.py` | SQL for conversations/messages (read, clear) |
+| `src/agent/memory.py` | SQL for conversations/messages (load, append, clear) |
 | `src/agent/todo_client.py` | HTTP client for the api's todo endpoints, as the user |
+| `src/agent/llm.py` | The LLM client (official OpenRouter SDK, with our retry policy) |
+| `src/agent/todo_agent.py` | Tools, system prompt, and the agent loop |
 | `src/agent/migrate.py` | Applies `migrations/*.sql` at startup |
 | `src/agent/migrations/` | Numbered SQL files (the schema, step by step) |
-| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py` |
+| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py`, `chat.py` |
 | `tests/conftest.py` | Shared test setup: uses `agent_db_test` + a test JWT secret; skips DB tests if Postgres is down |
 | `tests/helpers.py` | `make_token()` / `auth()` to build good and bad tokens in tests |
+| `tests/test_chat.py` | The agent loop with a fake model and a fake todo api (no money spent) |
 | `tests/` | Tests, run in-process with FastAPI's TestClient |
 
 ## Conventions shared with the other services

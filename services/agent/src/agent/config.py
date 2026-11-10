@@ -11,7 +11,7 @@ Same idea as services/api/internal/config/config.go.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # It can't connect to the api's `todo` database (see db/init.sql).
     database_url: str = "postgresql://agent:agent@localhost:5433/agent_db"
     db_min_conns: int = 1
-    db_max_conns: int = 5
+    db_max_conns: int = 10  # a chat holds one connection while it runs (see routes/chat.py)
 
     # Auth — the SAME secret the api signs tokens with (HS256, shared
     # secret; see ROADMAP "Auth"). No default on purpose: without it the
@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     # todos table — its tools call this over HTTP, as the user.
     api_url: str = "http://localhost:8080"
     api_timeout_seconds: float = 10.0
+
+    # The LLM — via OpenRouter's unified API, so ANY model from any
+    # provider works: change AGENT_MODEL, nothing else.
+    # Model ids: https://openrouter.ai/models  ("provider/model")
+    # SecretStr: never printed in logs or error messages.
+    openrouter_api_key: SecretStr = Field(min_length=1)
+    agent_model: str = "anthropic/claude-sonnet-5.5"
+    llm_max_tokens: int = 16000  # room for reasoning + reply; hitting it cuts the answer off
+    llm_timeout_seconds: float = 60.0
+    # The SDK retries 5xx/network errors by itself; its default keeps
+    # trying for up to ONE HOUR. A chat should give up much sooner.
+    llm_retry_seconds: float = 10.0
+    agent_max_steps: int = 10  # max LLM calls per chat message (stops runaway tool loops)
 
     # Logging
     log_level: Literal["debug", "info", "warning", "error"] = "info"

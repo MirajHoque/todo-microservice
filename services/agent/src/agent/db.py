@@ -32,6 +32,11 @@ async def open_pool(settings: Settings) -> AsyncConnectionPool:
         conninfo=settings.database_url,
         min_size=settings.db_min_conns,
         max_size=settings.db_max_conns,
+        # autocommit: every statement is saved immediately. Multi-statement
+        # work opts in with `async with conn.transaction():` (migrate.py).
+        # Without it, a connection held during a slow LLM call would sit
+        # "idle in transaction" the whole time.
+        kwargs={"autocommit": True},
         open=False,  # open explicitly below, so we can wait for it
     )
     log.info("connecting to database", extra={"action": "db_connect"})

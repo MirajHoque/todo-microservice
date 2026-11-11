@@ -26,19 +26,16 @@ import (
 type AuthHandler struct {
 	users      *db.UserRepository
 	jwtService *auth.Service
-	memory     interface{ ClearUser(string) } // agent memory manager
 }
 
 // NewAuthHandler creates an AuthHandler with its dependencies.
 func NewAuthHandler(
 	users *db.UserRepository,
 	jwtService *auth.Service,
-	memory interface{ ClearUser(string) },
 ) *AuthHandler {
 	return &AuthHandler{
 		users:      users,
 		jwtService: jwtService,
-		memory:     memory,
 	}
 }
 
@@ -195,18 +192,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles POST /api/v1/auth/logout
 //
-// JWT is stateless — we cannot "invalidate" a token on the server.
-// What we CAN do is clear the agent memory for this user so the
-// next session starts completely fresh.
+// JWT is stateless — we cannot "invalidate" a token on the server,
+// so this only logs the logout. The client is responsible for
+// deleting the token on their side.
 //
-// The client is responsible for deleting the token on their side.
+// The agent's memory is NOT cleared here: it lives in another
+// service (services/agent). web calls DELETE /api/v1/agent/conversation
+// itself on logout — the api doesn't call other services.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	userID := middleware.GetUserID(r.Context())
-
-	// Clear all agent memory for this user.
-	// Next login starts with a clean conversation history.
-	h.memory.ClearUser(userID)
 
 	log.Info("user logged out",
 		slog.String(logger.FieldUserID, userID),

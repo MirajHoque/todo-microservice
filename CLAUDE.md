@@ -20,9 +20,10 @@ and the current step. Tick off steps there as they are completed.
 ## Layout
 
 - `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
-- `services/agent/` — Python/FastAPI agent service (port 8083, step 2 in progress);
+- `services/agent/` — Python/FastAPI agent service (port 8083) — the only agent since 2f;
   `uv` + `make dev`/`make test`/`make lint`. Errors and log fields match the Go api.
-- `web/` — Next.js frontend (port 3000); forwards `/api/...` to `API_URL` via `web/proxy.ts`
+- `web/` — Next.js frontend (port 3000); `web/proxy.ts` forwards `/api/v1/agent/...` to
+  `AGENT_URL` (:8083) and every other `/api/...` to `API_URL` (:8080)
 - `compose.yaml` — **parked**: not used or updated until all services exist (see ROADMAP)
 - `Makefile` — `make db`, `make psql`, `make db-stop`, `make svc SERVICE=api CMD=test`
 - `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)

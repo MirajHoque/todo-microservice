@@ -6,6 +6,8 @@
 //   add     → createTodo()  POST   /api/v1/todos
 //   tick    → updateTodo()  PATCH  /api/v1/todos/{id}
 //   delete  → deleteTodo()  DELETE /api/v1/todos/{id}
+//   logout  → clearConversation() DELETE /api/v1/agent/conversation (agent)
+//             + logout()          POST   /api/v1/auth/logout       (api)
 //
 // After add/tick/delete we update the list from the API's answer
 // (the API returns the created/updated todo) instead of downloading
@@ -25,7 +27,15 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import { ChatPanel } from "@/components/chat-panel";
 import { TodoItem } from "@/components/todo-item";
-import { ApiError, createTodo, deleteTodo, listTodos, logout, updateTodo } from "@/lib/api";
+import {
+  ApiError,
+  clearConversation,
+  createTodo,
+  deleteTodo,
+  listTodos,
+  logout,
+  updateTodo,
+} from "@/lib/api";
 import { clearSession, getEmail, getToken } from "@/lib/session";
 import type { Priority, Todo } from "@/lib/types";
 
@@ -124,9 +134,13 @@ export default function TodosPage() {
   }
 
   async function handleLogout() {
-    // Tell the API (it clears the agent's memory for this user), then
-    // forget the token here. Logged out locally even if the call fails.
-    await logout().catch(() => {});
+    // Two services to tell, while the token still works:
+    //   - the agent forgets this user's chat (its memory in agent_db),
+    //     so the next login starts a fresh conversation
+    //   - the api logs the logout
+    // Both run at the same time; allSettled waits for both and never
+    // throws — we log out locally even if a service is down.
+    await Promise.allSettled([clearConversation(), logout()]);
     clearSession();
     router.push("/login");
   }

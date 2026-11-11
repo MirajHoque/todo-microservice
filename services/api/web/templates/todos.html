@@ -35,45 +35,15 @@
 <div id="empty-state" style="display:none;text-align:center;padding:32px 0;color:#888;">
     <div style="font-size:36px;margin-bottom:10px;">✓</div>
     <div style="font-size:15px;font-weight:500;margin-bottom:4px;">All clear!</div>
-    <div style="font-size:13px;">Add your first todo above or chat with the assistant below</div>
+    <div style="font-size:13px;">Add your first todo above</div>
 </div>
 
-<!-- AI Chat box -->
-<div class="card" style="margin-top:24px;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
-        <span style="font-size:18px;">🤖</span>
-        <h2 style="font-size:15px;font-weight:600;margin:0;">AI Assistant</h2>
-        <span style="font-size:12px;color:#888;margin-left:4px;">Ask me to manage your todos</span>
-    </div>
-
-    <!-- Chat messages -->
-    <div id="chat-messages" style="
-        min-height:120px;
-        max-height:320px;
-        overflow-y:auto;
-        margin-bottom:12px;
-        display:flex;
-        flex-direction:column;
-        gap:10px;
-    ">
-        <!-- Welcome message -->
-        <div class="chat-msg agent-bubble">
-            Hi! I can help you manage your todos. Try saying:<br>
-            <em>"add buy milk with high priority"</em> or <em>"what do I still need to do?"</em>
-        </div>
-    </div>
-
-    <!-- Chat input -->
-    <div style="display:flex;gap:8px;">
-        <input type="text"
-               id="chat-input"
-               placeholder="Ask me anything about your todos..."
-               style="flex:1;"
-               onkeydown="if(event.key==='Enter') sendChat()">
-        <button class="btn" style="width:auto;padding:9px 18px;" onclick="sendChat()" id="chat-btn">
-            Send
-        </button>
-    </div>
+<!-- The AI Assistant moved out of the Go api in step 2f: it is now the
+     Python agent service (services/agent), used by the Next.js app.
+     These old Go pages are removed in step 3. -->
+<div class="card" style="margin-top:24px;font-size:13px;color:#888;">
+    🤖 The AI Assistant has moved to the new app at
+    <a href="http://localhost:3000/todos">localhost:3000</a>.
 </div>
 {{end}}
 
@@ -100,24 +70,6 @@
     .priority-medium{background:#fff7ed;color:#ea580c}
     .priority-low   {background:#f0fdf4;color:#16a34a}
 
-    /* ── Chat bubbles ───────────────────────────────── */
-    .chat-msg{font-size:13px;line-height:1.6;padding:10px 14px;border-radius:12px;max-width:85%}
-    .user-bubble{
-        background:#2563eb;color:#fff;
-        border-radius:12px 12px 2px 12px;
-        align-self:flex-end;
-    }
-    .agent-bubble{
-        background:#f3f4f6;color:#1a1a1a;
-        border-radius:12px 12px 12px 2px;
-        align-self:flex-start;
-    }
-    .typing-bubble{
-        background:#f3f4f6;color:#888;
-        border-radius:12px 12px 12px 2px;
-        align-self:flex-start;
-        font-style:italic;
-    }
 </style>
 
 <script>
@@ -218,83 +170,6 @@ async function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user_email');
     window.location.href = '/';
-}
-
-// ── Chat functions ────────────────────────────────────────────────────────────
-
-async function sendChat() {
-    const input = document.getElementById('chat-input');
-    const btn   = document.getElementById('chat-btn');
-    const msg   = input.value.trim();
-    if (!msg) return;
-
-    // Show user message
-    appendChatMessage(msg, 'user');
-    input.value = '';
-    btn.disabled = true;
-
-    // Show typing indicator
-    const typingId = appendTyping();
-
-    try {
-        const res = await fetch('/api/v1/agent/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify({message: msg})
-        });
-
-        removeTyping(typingId);
-
-        const data = await res.json();
-
-        if (!res.ok) {
-            appendChatMessage(data.error || 'Something went wrong', 'agent');
-            return;
-        }
-
-        // Show agent reply
-        appendChatMessage(data.reply, 'agent');
-
-        // Reload todo list — agent may have changed it
-        await loadTodos();
-
-    } catch (err) {
-        removeTyping(typingId);
-        appendChatMessage('Network error — please try again', 'agent');
-    } finally {
-        btn.disabled = false;
-        input.focus();
-    }
-}
-
-function appendChatMessage(text, role) {
-    const container = document.getElementById('chat-messages');
-    const div = document.createElement('div');
-    div.className = 'chat-msg ' + (role === 'user' ? 'user-bubble' : 'agent-bubble');
-    div.textContent = text;
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    return div.id;
-}
-
-function appendTyping() {
-    const container = document.getElementById('chat-messages');
-    const div = document.createElement('div');
-    const id  = 'typing-' + Date.now();
-    div.id = id;
-    div.className = 'chat-msg typing-bubble';
-    div.textContent = 'Thinking...';
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
-    return id;
-}
-
-function removeTyping(id) {
-    const el = document.getElementById(id);
-    if (el) el.remove();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1,13 +1,13 @@
 # agent — the AI assistant service (Python / FastAPI)
 
-Being extracted from the Go api in step 2 of `docs/ROADMAP.md`.
-It will own the agents (orchestrator, todo agent, planner) and their
-memory (`agent_db`), and call the api's HTTP endpoints for todos.
+Extracted from the Go api in step 2 of `docs/ROADMAP.md`.
+It owns the agents (todo agent now; orchestrator and planner next) and
+their memory (`agent_db`), and calls the api's HTTP endpoints for todos.
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
-- Status: 2e — the todo agent works here (`POST /api/v1/agent/chat`).
-  web still sends chat to the Go api until 2f.
+- Status: 2f — the only agent: web's chat comes here (`web/proxy.ts`
+  sends `/api/v1/agent/...` to `AGENT_URL`); the Go agent is deleted.
 
 ## Run it
 
@@ -35,8 +35,8 @@ While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
 | `GET /health` | — | Liveness: the process is up |
 | `GET /health/ready` | — | Readiness: the database answers (503 if not) |
 | `GET /api/v1/agent/conversation` | JWT | Your saved chat messages, oldest first |
-| `DELETE /api/v1/agent/conversation` | JWT | Forget your conversation (204) |
-| `POST /api/v1/agent/chat` | JWT | `{"message": "..."}` → `{"reply": "..."}` (same contract as the Go api) |
+| `DELETE /api/v1/agent/conversation` | JWT | Forget your conversation (204) — web calls it on logout |
+| `POST /api/v1/agent/chat` | JWT | `{"message": "..."}` → `{"reply": "..."}` (same contract the Go api had) |
 
 Chat errors: `400 message is required`, `409 still answering your previous message`
 (one message at a time per user), `502 agent failed to respond` (the LLM failed).

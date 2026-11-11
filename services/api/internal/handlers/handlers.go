@@ -2,7 +2,7 @@
 //
 // Handler responsibilities:
 //   - Parse and validate the HTTP request
-//   - Call the appropriate service / agent
+//   - Call the appropriate service / repository
 //   - Write the HTTP response
 //
 // Handlers do NOT contain business logic. They are a thin translation layer

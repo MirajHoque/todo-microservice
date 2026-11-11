@@ -1,14 +1,15 @@
 // ============================================================
 // components/chat-panel.tsx — the "AI Assistant" box on /todos.
 //
-// You type a message → chat() sends POST /api/v1/agent/chat → the
-// Go api's orchestrator agent answers, and may add / complete /
-// delete todos with its tools. So after every reply we call
-// onAgentReplied() and the page reloads the list.
+// You type a message → chat() sends POST /api/v1/agent/chat →
+// proxy.ts forwards it to the Python agent service (AGENT_URL),
+// which may add / complete / delete todos with its tools (through
+// the Go api). So after every reply we call onAgentReplied() and
+// the page reloads the list.
 //
 // The conversation shown here lives only in this component (gone
-// on reload). The agent's own memory lives in the Go api, per user,
-// and is cleared on logout.
+// on reload). The agent's own memory lives in its database
+// (agent_db), per user, and is cleared on logout.
 // ============================================================
 
 "use client";

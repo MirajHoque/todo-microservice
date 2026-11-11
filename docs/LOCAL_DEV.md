@@ -9,11 +9,13 @@ microservices are about. Compose comes back once all services exist
 
 ```
 Terminal 1:  make db                          # Postgres in Docker  → localhost:5433
-Terminal 2:  cd services/api && make dev      # Go api              → localhost:8080
-Terminal 3:  cd web && npm run dev            # Next.js frontend    → localhost:3000
+Terminal 2:  cd services/api && make dev      # Go api (auth+todos) → localhost:8080
+Terminal 3:  cd services/agent && make dev    # Python agent        → localhost:8083
+Terminal 4:  cd web && npm run dev            # Next.js frontend    → localhost:3000
 ```
 
-More terminals are added as services are split out (auth, todo, agent).
+More terminals are added as services are split out (auth, todo).
+First-time setup for each service is in its own README.
 
 ## Why Postgres runs in Docker
 
@@ -34,6 +36,23 @@ the same version (`postgres:18-alpine`).
 
 The first `make db` creates the container (and downloads the image if
 needed). Later runs just `docker start` the existing container.
+
+### One server, one database per service
+
+After Postgres is up, `make db` also runs `db/init.sql` (safe to repeat):
+
+| Service | Database | User | psql shell |
+|---|---|---|---|
+| api (Go) | `todo` | `todo` | `make psql` |
+| agent (Python) | `agent_db` (+ `agent_db_test`) | `agent` | `make psql-agent` |
+
+Each user can only connect to its own database — the agent literally
+cannot read the `todos` table, it has to ask the api over HTTP
+(ROADMAP rule 3: one owner per table). Tables are created by each
+service's migrations when it starts, not by `db/init.sql`.
+
+(The `todo` user is a superuser because the Postgres image makes its
+first user one — fine locally; step 3 gives the Go services normal users.)
 
 ## Running the api
 
@@ -67,19 +86,21 @@ One-time setup:
 
 ```bash
 cd web
-cp .env.example .env.local   # sets API_URL=http://localhost:8080
+cp .env.example .env.local   # sets API_URL and AGENT_URL
 npm install                  # downloads dependencies into node_modules/
 ```
 
-Every day (with Postgres and the api already running):
+Every day (with Postgres, the api and the agent already running):
 
 ```bash
-cd web && npm run dev        # Terminal 3 → http://localhost:3000
+cd web && npm run dev        # Terminal 4 → http://localhost:3000
 ```
 
 Check the proxy: `curl localhost:3000/api/v1/todos` should return
 `{"error":"missing authorization header"}`. web forwarded the request
 to the Go api, and that is the api's answer.
+`curl -X DELETE localhost:3000/api/v1/agent/conversation` gets the same
+error from the Python agent instead (its answer also has a `request_id`).
 
 ## Stopping and resetting
 
@@ -96,13 +117,20 @@ Every address is configured by hand in each service's env file:
 | From → To | Setting | File |
 |---|---|---|
 | api → Postgres | `DATABASE_URL=postgres://todo:todo@localhost:5433/todo` | `services/api/.env` |
-| web → api | `API_URL=http://localhost:8080` | `web/.env.local` |
+| agent → Postgres | `DATABASE_URL=postgresql://agent:agent@localhost:5433/agent_db` | `services/agent/.env` |
+| web → api | `API_URL=http://localhost:8080` (auth, todos) | `web/.env.local` |
+| web → agent | `AGENT_URL=http://localhost:8083` (`/api/v1/agent/...`: chat; logout clears memory) | `web/.env.local` |
+| agent → api | `API_URL=http://localhost:8080` (todo tools, with the user's JWT) | `services/agent/.env` |
+| agent → LLM | `OPENROUTER_API_KEY`, `AGENT_MODEL` (any model, via OpenRouter) | `services/agent/.env` |
 
 The browser only ever talks to web (`localhost:3000`). web forwards
-`/api/...` to `API_URL` (see `web/proxy.ts`).
+`/api/v1/agent/...` to `AGENT_URL` and every other `/api/...` to
+`API_URL` — chosen by path (see `web/proxy.ts`).
 
-If one service is down, the others keep running: stop the api and web's
-pages still load, only its `/api/...` calls fail (HTTP 500).
+If one service is down, the others keep running: stop the agent and the
+todo list still works, only the chat says "Cannot reach the agent";
+stop the api and the chat can't change todos either (the agent's tools
+call the api).
 
 As more services appear, their env files will point at each other the
 same way.

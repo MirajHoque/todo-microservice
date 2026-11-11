@@ -20,7 +20,10 @@ and the current step. Tick off steps there as they are completed.
 ## Layout
 
 - `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
-- `web/` — Next.js frontend (port 3000); forwards `/api/...` to `API_URL` via `web/proxy.ts`
+- `services/agent/` — Python/FastAPI agent service (port 8083): orchestrator + todo + planner agents;
+  `uv` + `make dev`/`make test`/`make lint`. Errors and log fields match the Go api.
+- `web/` — Next.js frontend (port 3000); `web/proxy.ts` forwards `/api/v1/agent/...` to
+  `AGENT_URL` (:8083) and every other `/api/...` to `API_URL` (:8080)
 - `compose.yaml` — **parked**: not used or updated until all services exist (see ROADMAP)
 - `Makefile` — `make db`, `make psql`, `make db-stop`, `make svc SERVICE=api CMD=test`
 - `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)
@@ -38,8 +41,11 @@ and the current step. Tick off steps there as they are completed.
   writing Next.js code — this Next.js version differs from older docs.
 - API is served under `/api/v1` on `localhost:8080`
 - Local Postgres: `localhost:5433` (5432 is taken by a Postgres installed on
-  the Mac). Container `todo-postgres`, volume `todo-pgdata`. User/password/db: `todo`
-- psql shell: `make psql`
+  the Mac). Container `todo-postgres`, volume `todo-pgdata`. One database + user
+  per service, created by `make db` from `db/init.sql`: api → `todo`/`todo`,
+  agent → `agent_db` (+ `agent_db_test`) / `agent`. Users can't connect to
+  other services' databases.
+- psql shell: `make psql` (todo), `make psql-agent` (agent_db)
 
 ## Git
 

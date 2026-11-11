@@ -2,13 +2,13 @@
 // lib/types.ts — the API contract, written as TypeScript types.
 //
 // These mirror the Go structs in services/api/internal/models/
-// (and ChatRequest/ChatResponse in handlers/agent_handler.go).
-// Field names match the `json:"..."` tags, so a JSON response can
-// be used directly as one of these types.
+// and the agent's Pydantic models in services/agent/src/agent/routes/.
+// Field names match the JSON field names, so a JSON response can be
+// used directly as one of these types.
 //
-// Rule 2 in docs/ROADMAP.md: web never imports Go code. The only
-// link between the two services is this HTTP contract — if a Go
-// struct changes, update the matching type here.
+// Rule 2 in docs/ROADMAP.md: web never imports another service's
+// code. The only link is this HTTP contract — if a Go struct or a
+// Pydantic model changes, update the matching type here.
 // ============================================================
 
 // ── Users & auth ─────────────────────────────────────────────
@@ -66,10 +66,25 @@ export type UpdateTodoRequest = {
   done?: boolean;
 };
 
-// ── Agent ────────────────────────────────────────────────────
+// ── Agent (the Python service: services/agent) ───────────────
 
-// handlers.ChatResponse
+// A deletion the agent proposed. Nothing is deleted until the user
+// presses Confirm (step 2i.1) — routes/chat.py PendingAction.
+export type PendingAction = {
+  id: string;
+  kind: "delete_todos";
+  todos: { id: string; title: string }[];
+  expires_at: string; // the buttons stop working after this
+};
+
+// routes/chat.py ChatResponse — pending_action only when there is one
 export type ChatResponse = {
+  reply: string;
+  pending_action?: PendingAction;
+};
+
+// routes/actions.py ActionResponse — after Confirm / Cancel
+export type ActionResponse = {
   reply: string;
 };
 

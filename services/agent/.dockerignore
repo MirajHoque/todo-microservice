@@ -1,0 +1,17 @@
+# Files Docker never sends to the build (smaller, faster, safer).
+
+# Secrets — never inside an image
+.env
+
+# Recreated inside the image by `uv sync`
+.venv/
+
+# Caches and things the image doesn't need
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+tests/
+Dockerfile
+.dockerignore
+Makefile

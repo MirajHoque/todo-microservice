@@ -39,7 +39,15 @@ Routing (via Gateway API): `/` → web, `/api/auth` → auth, `/api/todos` → t
   - [x] 1a. Move the Go monolith to `services/api/` (temporary name)
   - [x] 1b. Add Postgres to `compose.yaml` (later replaced by `make db`, a plain `docker run`; compose is parked)
   - [x] 1c. `web/` (Next.js): login/register, todos, AI chat against the existing `/api/v1` endpoints. Runs natively with `npm run dev`; `/api` is forwarded by `proxy.ts` (`API_URL` read at runtime); Dockerfile with standalone output. The old Go HTML pages (`services/api/web/`) still exist — remove them in step 3.
-- [ ] **2. Extract `services/agent` (Python)** — agents-as-tools routing, planner agent, Postgres-backed memory, tools call the API over HTTP. Memory must store full turns *including tool calls and results* — the Go agent stores only text, so on later turns the model thinks it never called its tools (seen in 1c.6)
+- [x] **2. Extract `services/agent` (Python)** — agents-as-tools routing, planner agent, Postgres-backed memory, tools call the API over HTTP. Memory must store full turns *including tool calls and results* — the Go agent stores only text, so on later turns the model thinks it never called its tools (seen in 1c.6)
+  - [x] 2a. Scaffold: FastAPI + uv on port 8083, health endpoints, JSON logs and errors shaped like the Go api's
+  - [x] 2b. Own database `agent_db` (own user, can't reach `todo`), migrations at startup, conversations/messages tables
+  - [x] 2c. Verify the api's JWTs (shared HS256 secret); `GET`/`DELETE /api/v1/agent/conversation`
+  - [x] 2d. `TodoClient`: todo changes go through the api's HTTP endpoints, as the user (JWT + `X-Request-ID` forwarded)
+  - [x] 2e. Todo agent via the OpenRouter SDK (any model/provider); full messages incl. tool calls stored append-only (fixes 1c.6)
+  - [x] 2f. web routes `/api/v1/agent/*` to `AGENT_URL`; logout clears the agent's memory; Go agent code and `OPENROUTER_API_KEY` removed from the api
+  - [x] 2g. Orchestrator with the todo agent and a read-only planner agent as tools; one step budget for all agents
+  - [x] 2h. Dockerfile (uv, no dev deps, non-root, healthcheck); docs
 - [ ] **3. Split `services/api` into `services/auth` + `services/todo`** — database per service, shared code to `libs/go/`
 - [ ] **3½. Compose for the whole system** — bring `compose.yaml` back (it is parked until now) so every service plus Postgres starts with one command. Until this step each service runs natively in its own terminal (see `docs/LOCAL_DEV.md`).
 - [ ] **4. Local Kubernetes** (kind or k3d) with Kustomize manifests

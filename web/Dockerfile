@@ -9,12 +9,13 @@
 # The final image has no source code, no dev dependencies and
 # no build tools — just Node and the standalone server.
 #
-# API_URL is NOT baked in: proxy.ts reads it when the container
-# starts, so the same image runs anywhere:
+# API_URL / AGENT_URL are NOT baked in: proxy.ts reads them when
+# the container starts, so the same image runs anywhere:
 #
 #   docker build -t todo-web web/
 #   docker run --rm -p 3000:3000 \
-#     -e API_URL=http://host.docker.internal:8080 todo-web
+#     -e API_URL=http://host.docker.internal:8080 \
+#     -e AGENT_URL=http://host.docker.internal:8083 todo-web
 #
 # (host.docker.internal = "your Mac" as seen from inside a container;
 # localhost there would mean the container itself.)

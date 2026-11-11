@@ -3,8 +3,8 @@
 //
 // Pages call these instead of using fetch() directly, so the
 // details live in one place:
-//   - the base path /api/v1 (forwarded to the Go api by the
-//     proxy in proxy.ts)
+//   - the base path /api/v1 (proxy.ts forwards /api/v1/agent/...
+//     to the Python agent, everything else to the Go api)
 //   - JSON encoding/decoding
 //   - attaching the JWT ("Authorization: Bearer <token>")
 //   - turning error responses into an ApiError
@@ -18,6 +18,7 @@
 
 import { getToken } from "./session";
 import type {
+  ActionResponse,
   AuthResponse,
   ChatResponse,
   CreateTodoRequest,
@@ -60,12 +61,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
 
   if (!res.ok) {
-    // The api sends {"error": "...", "request_id": "..."}. If the api
-    // is down, web's proxy answers 500 with plain text instead — so no
-    // JSON body + a 5xx means "the api did not answer".
+    // Both services send {"error": "...", "request_id": "..."}. If a
+    // service is down, web's proxy answers 500 with plain text instead —
+    // so no JSON body + a 5xx means "that service did not answer".
     const err = (await res.json().catch(() => null)) as ErrorResponse | null;
+    const service = path.startsWith("/agent") ? "agent" : "api";
     const message =
-      err?.error ?? (res.status >= 500 ? "Cannot reach the api. Is it running?" : res.statusText);
+      err?.error ??
+      (res.status >= 500 ? `Cannot reach the ${service}. Is it running?` : res.statusText);
     throw new ApiError(res.status, message, err?.request_id);
   }
 
@@ -86,8 +89,8 @@ export function login(email: string, password: string): Promise<AuthResponse> {
   return request("POST", "/auth/login", { email, password });
 }
 
-// POST /auth/logout → 200. Clears the agent's memory for this user on
-// the server; the caller must also clearSession() in the browser.
+// POST /auth/logout → 200. A JWT can't be revoked, so this only logs
+// the logout; the caller must also clearSession() in the browser.
 export async function logout(): Promise<void> {
   await request("POST", "/auth/logout");
 }
@@ -114,10 +117,27 @@ export function deleteTodo(id: string): Promise<void> {
   return request("DELETE", `/todos/${encodeURIComponent(id)}`);
 }
 
-// ── Agent (needs a token) ────────────────────────────────────
+// ── Agent (needs a token) — answered by the Python agent ─────
 
-// POST /agent/chat → 200 { reply }
-export async function chat(message: string): Promise<string> {
-  const res = await request<ChatResponse>("POST", "/agent/chat", { message });
-  return res.reply;
+// POST /agent/chat → 200 { reply, pending_action? }
+export function chat(message: string): Promise<ChatResponse> {
+  return request("POST", "/agent/chat", { message });
+}
+
+// The user's clicks on a proposed deletion. The agent itself can't
+// call these — that's the guardrail (step 2i.1).
+// POST /agent/actions/{id}/confirm → 200 { reply } — deletes the todos
+export function confirmAction(id: string): Promise<ActionResponse> {
+  return request("POST", `/agent/actions/${encodeURIComponent(id)}/confirm`);
+}
+
+// DELETE /agent/actions/{id} → 200 { reply } — deletes nothing
+export function cancelAction(id: string): Promise<ActionResponse> {
+  return request("DELETE", `/agent/actions/${encodeURIComponent(id)}`);
+}
+
+// DELETE /agent/conversation → 204. Forgets this user's chat history
+// (the agent's memory in agent_db), so the next chat starts fresh.
+export function clearConversation(): Promise<void> {
+  return request("DELETE", "/agent/conversation");
 }

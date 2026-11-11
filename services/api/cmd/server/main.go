@@ -13,8 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/agents"
-	agentmemory "github.com/MirajHoque/todo-microservice/services/api/internal/agents/memory"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/auth"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/config"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
@@ -73,21 +71,18 @@ func main() {
 
 	// ── 5. Services & repositories ─────────────────────────────────────────
 	jwtService := auth.NewService(cfg.JWTSecret, cfg.JWTExpiry)
-	memoryManager := agentmemory.NewManager(10)
 	userRepo := db.NewUserRepository(database)
 	todoRepo := db.NewTodoRepository(database)
 
-	// ── 6. Agents ──────────────────────────────────────────────────────────
-	agentClient := agents.NewClient(cfg.OpenRouterAPIKey, cfg.AgentModel, log)
-	orchestrator := agents.NewOrchestrator(agentClient, memoryManager, todoRepo)
+	// The AI agent used to live here (internal/agents). Since step 2f it
+	// is its own service: services/agent (Python), on port 8083.
 
-	// ── 7. Handlers ────────────────────────────────────────────────────────
-	authHandler := handlers.NewAuthHandler(userRepo, jwtService, memoryManager)
+	// ── 6. Handlers ────────────────────────────────────────────────────────
+	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
 	todoHandler := handlers.NewTodoHandler(todoRepo)
 	pageHandler := handlers.NewPageHandler(web.FS)
-	agentHandler := handlers.NewAgentHandler(orchestrator)
 
-	// ── 8. Router ──────────────────────────────────────────────────────────
+	// ── 7. Router ──────────────────────────────────────────────────────────
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -123,13 +118,10 @@ func main() {
 			r.Get("/todos", todoHandler.List)
 			r.Patch("/todos/{id}", todoHandler.Update)
 			r.Delete("/todos/{id}", todoHandler.Delete)
-
-			// Agent chat — new in step 6
-			r.Post("/agent/chat", agentHandler.Chat)
 		})
 	})
 
-	// ── 9. HTTP server with graceful shutdown ──────────────────────────────
+	// ── 8. HTTP server with graceful shutdown ──────────────────────────────
 	srv := &http.Server{
 		Addr:         cfg.Addr(),
 		Handler:      r,

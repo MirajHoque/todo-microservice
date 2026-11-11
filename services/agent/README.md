@@ -1,13 +1,13 @@
 # agent — the AI assistant service (Python / FastAPI)
 
 Extracted from the Go api in step 2 of `docs/ROADMAP.md`.
-It owns the agents (todo agent now; orchestrator and planner next) and
-their memory (`agent_db`), and calls the api's HTTP endpoints for todos.
+It owns the agents (orchestrator, todo agent, planner) and their memory
+(`agent_db`), and calls the api's HTTP endpoints for todos.
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
-- Status: 2f — the only agent: web's chat comes here (`web/proxy.ts`
-  sends `/api/v1/agent/...` to `AGENT_URL`); the Go agent is deleted.
+- Status: 2g — orchestrator + todo agent + planner agent. web's chat comes
+  here (`web/proxy.ts` sends `/api/v1/agent/...` to `AGENT_URL`).
 
 ## Run it
 
@@ -41,21 +41,53 @@ While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
 Chat errors: `400 message is required`, `409 still answering your previous message`
 (one message at a time per user), `502 agent failed to respond` (the LLM failed).
 
-## The agent (`src/agent/todo_agent.py`)
+## The agents (`src/agent/agents/`)
 
-Any tool-calling model, through **OpenRouter** (official `openrouter` SDK, OpenRouter's
-unified chat format — not tied to one provider), with four tools: `list_todos`,
-`create_todo`, `complete_todo`, `delete_todo`. One chat message runs this loop:
+Three agents, "agents as tools": the user talks to the **orchestrator**,
+whose tools are the other agents.
 
-1. send the stored conversation + the new message + the tool definitions
+```
+user ──▶ orchestrator ──┬─ delegate_to_todo_agent(task)    ──▶ todo agent    ──▶ api (read + write)
+                        └─ delegate_to_planner_agent(goal) ──▶ planner agent ──▶ api (read only)
+```
+
+| Agent | File | Tools | Job |
+|---|---|---|---|
+| orchestrator | `orchestrator.py` | the two `delegate_to_…` | Talks to the user; answers small talk itself, hands real work to an agent, words the reply |
+| todo | `todo.py` | `list_todos`, `create_todo`, `complete_todo`, `delete_todo` | The only agent that changes todos; reports back with ids |
+| planner | `planner.py` | `list_todos` only | Turns a goal into 3–7 prioritized steps; *can't* change anything (least privilege) |
+
+All three run the same loop (`loop.py`) with any tool-calling model, through
+**OpenRouter** (official `openrouter` SDK, unified chat format — not tied to one
+provider):
+
+1. send the system prompt + messages + the agent's tool definitions
 2. the answer has `tool_calls` → run every requested tool (several at once if
-   asked), add one `{"role": "tool", "tool_call_id": ...}` message per result
-   (failures as text starting with `error:`), repeat
-3. no tool calls → its text is the reply. At most `AGENT_MAX_STEPS` LLM calls.
+   asked), add one `{"role": "tool", "tool_call_id": ...}` message per result, repeat
+3. no tool calls → its text is the answer
 
-Every message is saved the moment it exists, **append-only**, exactly as sent or
-received — including `tool_calls` and `reasoning_details` — so on the next message
-the model sees what it really did. The tools call the api as the user (below).
+A tool never raises: bad arguments, an api error, a sub-agent whose model is
+down, even a bug — all become a result starting with `error:` that the model can
+explain. So every tool call in the history always has its result.
+
+**Memory.** Only the orchestrator's conversation is stored — append-only,
+exactly as sent/received, including `tool_calls` (its delegations), the agents'
+reports and `reasoning_details`. Sub-agents start fresh for every task, so the
+orchestrator writes each task out in full (with todo ids from earlier reports:
+"mark it as done" needs no extra lookup). If the service died between a tool
+call and its result, `memory.load_history` adds a placeholder result so the
+conversation keeps working.
+
+**Step budget.** `AGENT_MAX_STEPS` counts LLM calls by *all* agents together
+for one chat message (not per agent — that would multiply). If it runs out,
+the orchestrator gets one extra call with tools switched off
+(`tool_choice: "none"`) to tell the user what was done.
+
+| Message | LLM calls |
+|---|---|
+| "hi" | 1 (orchestrator only) |
+| "add buy milk, it's urgent" | 4 (orchestrator → todo ×2 → orchestrator) |
+| "plan a picnic and add the steps" | 7 (planner ×2, todo ×2 with all creates in one turn, orchestrator ×3) |
 
 ### Switching models / providers
 
@@ -64,8 +96,8 @@ supports tools, and restart. No code changes. Tested:
 
 | `AGENT_MODEL` | Provider | ≈ cost per message |
 |---|---|---|
-| `anthropic/claude-sonnet-5.5` (default) | Anthropic | ~1 cent |
-| `google/gemini-2.5-flash` | Google | ~0.07 cent |
+| `anthropic/claude-sonnet-5.5` (default) | Anthropic | ~0.4 cent (small talk) – 3 cents (plan + add) |
+| `google/gemini-2.5-flash` | Google | ~7× cheaper (plan + add ≈ 0.5 cent) |
 
 Each `llm call` log line shows the `model` that answered and its `cost_usd`.
 
@@ -77,7 +109,7 @@ Each `llm call` log line shows the `model` that answered and its `cost_usd`.
 | `AGENT_MODEL` | `anthropic/claude-sonnet-5.5` | Any OpenRouter model id |
 | `LLM_MAX_TOKENS` | 16000 | OpenRouter reserves credit for this maximum — lower it if you get a 402 "requires more credits" |
 | `LLM_RETRY_SECONDS` | 10 | The SDK retries 5xx/network errors; its own default is one hour |
-| `AGENT_MAX_STEPS` | 10 | Max LLM calls per chat message |
+| `AGENT_MAX_STEPS` | 20 | Max LLM calls per chat message, all agents together |
 
 ## Calling the api (todos)
 
@@ -158,13 +190,16 @@ that has already run.
 | `src/agent/memory.py` | SQL for conversations/messages (load, append, clear) |
 | `src/agent/todo_client.py` | HTTP client for the api's todo endpoints, as the user |
 | `src/agent/llm.py` | The LLM client (official OpenRouter SDK, with our retry policy) |
-| `src/agent/todo_agent.py` | Tools, system prompt, and the agent loop |
+| `src/agent/agents/loop.py` | The agent loop every agent runs; `Agent`, `Tool`, step `Budget` |
+| `src/agent/agents/orchestrator.py` | The agent the user talks to; delegates to the others |
+| `src/agent/agents/todo.py` | The todo agent and the todo tools |
+| `src/agent/agents/planner.py` | The planner agent (read-only) |
 | `src/agent/migrate.py` | Applies `migrations/*.sql` at startup |
 | `src/agent/migrations/` | Numbered SQL files (the schema, step by step) |
 | `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py`, `chat.py` |
 | `tests/conftest.py` | Shared test setup: uses `agent_db_test` + a test JWT secret; skips DB tests if Postgres is down |
 | `tests/helpers.py` | `make_token()` / `auth()` to build good and bad tokens in tests |
-| `tests/test_chat.py` | The agent loop with a fake model and a fake todo api (no money spent) |
+| `tests/test_chat.py` | All three agents with a fake model (one script per agent) and a fake todo api (no money spent) |
 | `tests/` | Tests, run in-process with FastAPI's TestClient |
 
 ## Conventions shared with the other services

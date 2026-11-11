@@ -7,7 +7,8 @@ Same contract as the Go api's endpoint, so web needs no change:
 Steps for one message:
   1. lock the user's conversation (one message at a time per user)
   2. load the stored history, append the new user message
-  3. run the todo agent (todo_agent.py); it saves each new message
+  3. run the orchestrator (agents/orchestrator.py); it may hand work
+     to the todo or planner agent, and saves each new message
   4. unlock, return the reply
 
 Why the lock: if two messages from the same user ran at once, their
@@ -18,10 +19,11 @@ still holds on Kubernetes with several replicas.
 """
 
 from fastapi import APIRouter, HTTPException
-from openrouter import errors as openrouter_errors
 from pydantic import BaseModel
 
-from agent import memory, todo_agent
+from agent import memory
+from agent.agents import orchestrator
+from agent.agents.loop import LLM_FAILURES, Budget, Run
 from agent.auth import CurrentUser
 from agent.config import get_settings
 from agent.db import Pool
@@ -71,12 +73,17 @@ async def chat(
             async def save(message: dict) -> None:
                 await memory.append_message(conn, conversation_id, message)
 
-            reply = await todo_agent.run(llm, todos, caller, history, save, get_settings())
-        except (
-            openrouter_errors.OpenRouterError,  # an error answer from OpenRouter (4xx/5xx)
-            openrouter_errors.NoResponseError,  # network error / timeout
-            todo_agent.LLMError,
-        ) as exc:
+            settings = get_settings()
+            run = Run(
+                llm=llm,
+                settings=settings,
+                todos=todos,
+                caller=caller,
+                # One budget for ALL agents working on this message.
+                budget=Budget(settings.agent_max_steps),
+            )
+            reply = await orchestrator.run(run, history, save)
+        except LLM_FAILURES as exc:  # the orchestrator's own model call failed
             log.error("llm call failed", extra={"action": "llm_fail", "error": str(exc)[:300]})
             raise HTTPException(502, "agent failed to respond") from None  # Go api's message
         finally:

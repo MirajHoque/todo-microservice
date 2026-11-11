@@ -53,7 +53,40 @@ async def load_history(conn: AsyncConnection, conversation_id: str) -> list[Chat
         "SELECT message FROM messages WHERE conversation_id = %s ORDER BY id",
         (conversation_id,),
     )
-    return [row[0] for row in await cur.fetchall()]
+    return close_unanswered_tool_calls([row[0] for row in await cur.fetchall()])
+
+
+INTERRUPTED = "error: interrupted - this tool call never finished"
+
+
+def close_unanswered_tool_calls(messages: list[ChatMessage]) -> list[ChatMessage]:
+    """Give every tool call a result, adding placeholders where one is missing.
+
+    Models reject a history where a tool call has no result. That can
+    happen if the service stops between saving the model's tool call and
+    saving the result (a crash, a deploy, Kubernetes moving the pod).
+    Without this, every later message of that user would fail.
+
+    The placeholders are only added to what we SEND; the table stays
+    append-only and untouched.
+    """
+    out: list[ChatMessage] = []
+    waiting: list[str] = []  # tool_call ids still without a result
+
+    def close_waiting() -> None:
+        out.extend({"role": "tool", "tool_call_id": i, "content": INTERRUPTED} for i in waiting)
+        waiting.clear()
+
+    for msg in messages:
+        if msg.get("role") == "tool" and msg.get("tool_call_id") in waiting:
+            waiting.remove(msg["tool_call_id"])
+        elif waiting:  # the results stopped coming: close the rest
+            close_waiting()
+        out.append(msg)
+        if msg.get("role") == "assistant":
+            waiting = [c["id"] for c in msg.get("tool_calls") or []]
+    close_waiting()
+    return out
 
 
 async def get_or_create_conversation(conn: AsyncConnection, user_id: str) -> str:

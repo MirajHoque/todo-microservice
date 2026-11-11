@@ -53,7 +53,11 @@ class Settings(BaseSettings):
     # The SDK retries 5xx/network errors by itself; its default keeps
     # trying for up to ONE HOUR. A chat should give up much sooner.
     llm_retry_seconds: float = 10.0
-    agent_max_steps: int = 10  # max LLM calls per chat message (stops runaway tool loops)
+    # Max LLM calls per chat message, by ALL agents together (orchestrator +
+    # sub-agents). Stops runaway loops; planning + adding 7 todos takes
+    # 6–13 depending on the model. If it runs out, the orchestrator gets
+    # one extra call to tell the user what was done.
+    agent_max_steps: int = 20
 
     # Logging
     log_level: Literal["debug", "info", "warning", "error"] = "info"

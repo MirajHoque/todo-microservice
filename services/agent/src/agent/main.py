@@ -39,7 +39,7 @@ from agent.db import open_pool
 from agent.llm import create_llm
 from agent.log import get_logger, request_id_var, setup_logging
 from agent.migrate import migrate
-from agent.routes import chat, conversation, health
+from agent.routes import actions, chat, conversation, health
 from agent.todo_client import TodoClient
 
 log = get_logger(__name__)
@@ -132,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(conversation.router)
     app.include_router(chat.router)
+    app.include_router(actions.router)
 
     log.info("starting agent", extra={"addr": f"{settings.host}:{settings.port}"})
     return app

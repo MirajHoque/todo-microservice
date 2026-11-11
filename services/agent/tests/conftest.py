@@ -23,7 +23,9 @@ os.environ["OPENROUTER_API_KEY"] = "test-key-never-used"  # tests use a fake LLM
 
 import psycopg  # noqa: E402  (imports after setting the env vars, on purpose)
 import pytest  # noqa: E402
+from fakes import CHAT, CONVERSATION, FakeModel, FakeTodoAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from helpers import auth, make_token  # noqa: E402
 
 from agent.main import app  # noqa: E402
 
@@ -48,4 +50,30 @@ def db_client(database_url: str):
     with TestClient(app) as client:
         yield client
     with psycopg.connect(database_url) as conn:
-        conn.execute("TRUNCATE conversations, messages")
+        conn.execute("TRUNCATE conversations, messages, pending_actions")
+
+
+@pytest.fixture
+def chat(db_client):
+    """setup(token=None, **FakeModel args) → (send, history, model, api).
+
+    Swaps the fakes (fakes.py) into the app. Pass `token` to act as a
+    specific user (e.g. to test that someone else can't confirm).
+    """
+
+    def setup(token: str | None = None, **model_kwargs):
+        model, api = FakeModel(**model_kwargs), FakeTodoAPI()
+        app.state.llm = model.client()
+        app.state.todos = api.client()
+        headers = auth(token or make_token())
+
+        def send(message: str):
+            return db_client.post(CHAT, json={"message": message}, headers=headers)
+
+        def history() -> list[dict]:
+            res = db_client.get(CONVERSATION, headers=headers)
+            return [m["message"] for m in res.json()["messages"]]
+
+        return send, history, model, api
+
+    return setup

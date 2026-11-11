@@ -59,7 +59,9 @@ docker run --rm -p 8083:8083 \
 | `GET /health/ready` | — | Readiness: the database answers (503 if not) |
 | `GET /api/v1/agent/conversation` | JWT | Your saved chat messages, oldest first |
 | `DELETE /api/v1/agent/conversation` | JWT | Forget your conversation (204) — web calls it on logout |
-| `POST /api/v1/agent/chat` | JWT | `{"message": "..."}` → `{"reply": "..."}` (same contract the Go api had) |
+| `POST /api/v1/agent/chat` | JWT | `{"message": "..."}` → `{"reply": "..."}` (+ `pending_action` when a deletion waits for the user) |
+| `POST /api/v1/agent/actions/{id}/confirm` | JWT | The user pressed **Confirm**: delete the proposed todos → `{"reply": "..."}` |
+| `DELETE /api/v1/agent/actions/{id}` | JWT | The user pressed **Cancel**: delete nothing → `{"reply": "..."}` |
 
 Chat errors: `400 message is required`, `409 still answering your previous message`
 (one message at a time per user), `502 agent failed to respond` (the LLM failed).
@@ -111,6 +113,20 @@ the orchestrator gets one extra call with tools switched off
 | "hi" | 1 (orchestrator only) |
 | "add buy milk, it's urgent" | 4 (orchestrator → todo ×2 → orchestrator) |
 | "plan a picnic and add the steps" | 7 (planner ×2, todo ×2 with all creates in one turn, orchestrator ×3) |
+
+## Guardrails (step 2i)
+
+Limits that hold *even if the model misbehaves*. Code beats prompt: a prompt
+rule is a request, a code rule can't be broken.
+
+**Deleting needs the user's click (human-in-the-loop, `actions.py`).** The
+`delete_todo` tool doesn't delete — it only proposes. After the chat message
+the proposal is stored in `pending_actions` and returned as `pending_action`;
+web shows **Confirm / Cancel**. Only `POST /actions/{id}/confirm` deletes, and
+no agent has a tool that calls it — only a person clicking. So a mistake, or an
+instruction hidden in a todo title, can't delete anything. A typed "yes" doesn't
+count either. The action works once (`DELETE … RETURNING`), only for its owner,
+for 10 minutes; a newer proposal or logout replaces/removes it.
 
 ### Switching models / providers
 
@@ -212,6 +228,7 @@ that has already run.
 | `src/agent/auth.py` | JWT check; `CurrentUser` dependency → the caller's user id |
 | `src/agent/memory.py` | SQL for conversations/messages (load, append, clear) |
 | `src/agent/todo_client.py` | HTTP client for the api's todo endpoints, as the user |
+| `src/agent/actions.py` | Pending actions: deletions waiting for the user's Confirm |
 | `src/agent/llm.py` | The LLM client (official OpenRouter SDK, with our retry policy) |
 | `src/agent/agents/loop.py` | The agent loop every agent runs; `Agent`, `Tool`, step `Budget` |
 | `src/agent/agents/orchestrator.py` | The agent the user talks to; delegates to the others |
@@ -219,10 +236,12 @@ that has already run.
 | `src/agent/agents/planner.py` | The planner agent (read-only) |
 | `src/agent/migrate.py` | Applies `migrations/*.sql` at startup |
 | `src/agent/migrations/` | Numbered SQL files (the schema, step by step) |
-| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py`, `chat.py` |
+| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py`, `chat.py`, `actions.py` (Confirm/Cancel) |
 | `tests/conftest.py` | Shared test setup: uses `agent_db_test` + a test JWT secret; skips DB tests if Postgres is down |
 | `tests/helpers.py` | `make_token()` / `auth()` to build good and bad tokens in tests |
-| `tests/test_chat.py` | All three agents with a fake model (one script per agent) and a fake todo api (no money spent) |
+| `tests/fakes.py` | The fake model (one script per agent) and fake todo api; the `chat` fixture is in `conftest.py` |
+| `tests/test_chat.py` | All three agents end to end, no money spent |
+| `tests/test_actions.py` | The delete guardrail: the model alone can't delete |
 | `tests/` | Tests, run in-process with FastAPI's TestClient |
 
 ## Conventions shared with the other services

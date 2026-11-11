@@ -47,6 +47,11 @@ it as todos, unless they already asked for that. When they agree, send the todo 
 the exact list to create.
 - Only tell the user what an agent actually reported. If an agent reports an error, \
 explain it plainly.
+- Deleting needs the user's click: the app shows Confirm and Cancel buttons under your \
+reply. When the todo agent reports todos waiting for confirmation, say which ones and ask \
+the user to press Confirm. Never say they are deleted. A typed "yes" doesn't delete; \
+point them to the button.
+- Messages starting with [app] come from the app and report what the user clicked.
 - Keep replies short and friendly. Never show todo ids to the user."""
 
 

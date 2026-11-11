@@ -92,6 +92,10 @@ class Run:
     todos: TodoClient  # the api's todo endpoints …
     caller: Caller  # … called as this user, with their JWT
     budget: Budget
+    # Deletions the todo agent PROPOSED ([{"id", "title"}]). Nothing is
+    # deleted during the run: routes/chat.py turns these into a pending
+    # action, and only the user's Confirm click deletes (step 2i.1).
+    pending_deletes: list[dict[str, str]] = field(default_factory=list)
 
 
 # A tool's Python side: gets the Run and the model's arguments, returns

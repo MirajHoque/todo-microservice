@@ -18,6 +18,7 @@
 
 import { getToken } from "./session";
 import type {
+  ActionResponse,
   AuthResponse,
   ChatResponse,
   CreateTodoRequest,
@@ -118,10 +119,21 @@ export function deleteTodo(id: string): Promise<void> {
 
 // ── Agent (needs a token) — answered by the Python agent ─────
 
-// POST /agent/chat → 200 { reply }
-export async function chat(message: string): Promise<string> {
-  const res = await request<ChatResponse>("POST", "/agent/chat", { message });
-  return res.reply;
+// POST /agent/chat → 200 { reply, pending_action? }
+export function chat(message: string): Promise<ChatResponse> {
+  return request("POST", "/agent/chat", { message });
+}
+
+// The user's clicks on a proposed deletion. The agent itself can't
+// call these — that's the guardrail (step 2i.1).
+// POST /agent/actions/{id}/confirm → 200 { reply } — deletes the todos
+export function confirmAction(id: string): Promise<ActionResponse> {
+  return request("POST", `/agent/actions/${encodeURIComponent(id)}/confirm`);
+}
+
+// DELETE /agent/actions/{id} → 200 { reply } — deletes nothing
+export function cancelAction(id: string): Promise<ActionResponse> {
+  return request("DELETE", `/agent/actions/${encodeURIComponent(id)}`);
 }
 
 // DELETE /agent/conversation → 204. Forgets this user's chat history

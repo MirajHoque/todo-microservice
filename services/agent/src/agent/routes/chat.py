@@ -1,15 +1,19 @@
 """routes/chat.py — POST /api/v1/agent/chat.
 
-Same contract as the Go api's endpoint, so web needs no change:
   request  {"message": "add buy milk"}
   response {"reply": "Added \"Buy milk\" to your list."}
+
++ "pending_action": {...} when the agent proposed deleting todos (step
+2i.1): web shows Confirm / Cancel, and only the user's click deletes
+(routes/actions.py).
 
 Steps for one message:
   1. lock the user's conversation (one message at a time per user)
   2. load the stored history, append the new user message
   3. run the orchestrator (agents/orchestrator.py); it may hand work
      to the todo or planner agent, and saves each new message
-  4. unlock, return the reply
+  4. store any proposed deletion as a pending action
+  5. unlock, return the reply
 
 Why the lock: if two messages from the same user ran at once, their
 messages would interleave in the history (a tool_use from one run
@@ -18,10 +22,16 @@ Postgres advisory lock works across ALL copies of this service, so it
 still holds on Kubernetes with several replicas.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
+from psycopg import AsyncConnection
+from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel
 
-from agent import memory
+from agent import actions, memory
 from agent.agents import orchestrator
 from agent.agents.loop import LLM_FAILURES, Budget, Run
 from agent.auth import CurrentUser
@@ -41,11 +51,49 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class TodoRef(BaseModel):
+    id: str
+    title: str
+
+
+class PendingAction(BaseModel):
+    """A deletion waiting for the user's Confirm / Cancel click."""
+
+    id: str
+    kind: str = "delete_todos"
+    todos: list[TodoRef]
+    expires_at: datetime
+
+
 class ChatResponse(BaseModel):
     reply: str
+    pending_action: PendingAction | None = None
 
 
-@router.post("/chat")
+@asynccontextmanager
+async def conversation_lock(
+    pool: AsyncConnectionPool, user_id: str
+) -> AsyncIterator[AsyncConnection]:
+    """One connection holding the user's conversation lock; 409 if it's taken.
+
+    Used by the chat AND by Confirm/Cancel (routes/actions.py): both
+    append to the conversation, so they must never run at the same time.
+    """
+    async with pool.connection() as conn:  # the advisory lock belongs to this connection
+        cur = await conn.execute(
+            "SELECT pg_try_advisory_lock(%s, hashtext(%s))", (CHAT_LOCK_SPACE, user_id)
+        )
+        if not (await cur.fetchone())[0]:
+            raise HTTPException(409, "still answering your previous message")
+        try:
+            yield conn
+        finally:
+            await conn.execute(
+                "SELECT pg_advisory_unlock(%s, hashtext(%s))", (CHAT_LOCK_SPACE, user_id)
+            )
+
+
+@router.post("/chat", response_model_exclude_none=True)  # no pending_action → field left out
 async def chat(
     body: ChatRequest, caller: CurrentUser, pool: Pool, todos: Todos, llm: LLM
 ) -> ChatResponse:
@@ -55,13 +103,7 @@ async def chat(
     if len(text) > 4000:
         raise HTTPException(400, "message is too long (max 4000 characters)")
 
-    # One connection for the whole chat: the advisory lock belongs to it.
-    async with pool.connection() as conn:
-        cur = await conn.execute(
-            "SELECT pg_try_advisory_lock(%s, hashtext(%s))", (CHAT_LOCK_SPACE, caller.user_id)
-        )
-        if not (await cur.fetchone())[0]:
-            raise HTTPException(409, "still answering your previous message")
+    async with conversation_lock(pool, caller.user_id) as conn:
         try:
             conversation_id = await memory.get_or_create_conversation(conn, caller.user_id)
             history = await memory.load_history(conn, conversation_id)
@@ -86,9 +128,16 @@ async def chat(
         except LLM_FAILURES as exc:  # the orchestrator's own model call failed
             log.error("llm call failed", extra={"action": "llm_fail", "error": str(exc)[:300]})
             raise HTTPException(502, "agent failed to respond") from None  # Go api's message
-        finally:
-            await conn.execute(
-                "SELECT pg_advisory_unlock(%s, hashtext(%s))", (CHAT_LOCK_SPACE, caller.user_id)
+
+        pending = None
+        if run.pending_deletes:  # the agent proposed deletions: wait for the user's click
+            action_id, expires_at = await actions.propose_deletion(
+                conn, conversation_id, run.pending_deletes
+            )
+            pending = PendingAction(id=action_id, todos=run.pending_deletes, expires_at=expires_at)
+            log.info(
+                "deletion waiting for confirmation",
+                extra={"action": "delete_proposed", "todos": len(run.pending_deletes)},
             )
 
-    return ChatResponse(reply=reply)
+    return ChatResponse(reply=reply, pending_action=pending)

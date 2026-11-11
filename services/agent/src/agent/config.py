@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # one extra call to tell the user what was done.
     agent_max_steps: int = 20
 
+    # Guardrails (step 2i.2) — per user, checked before any model is called.
+    chat_messages_per_hour: int = Field(default=30, ge=1)
+    daily_cost_limit_usd: float = Field(default=0.50, gt=0)  # midnight to midnight, UTC
+
     # Logging
     log_level: Literal["debug", "info", "warning", "error"] = "info"
     log_format: Literal["json", "text"] = "json"

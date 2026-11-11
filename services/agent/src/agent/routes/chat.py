@@ -9,11 +9,13 @@
 
 Steps for one message:
   1. lock the user's conversation (one message at a time per user)
-  2. load the stored history, append the new user message
-  3. run the orchestrator (agents/orchestrator.py); it may hand work
+  2. check the user's rate limit and daily cost cap (usage.py) → 429
+  3. load the stored history, append the new user message
+  4. run the orchestrator (agents/orchestrator.py); it may hand work
      to the todo or planner agent, and saves each new message
-  4. store any proposed deletion as a pending action
-  5. unlock, return the reply
+  5. record what the LLM calls cost — even if the run failed
+  6. store any proposed deletion as a pending action
+  7. unlock, return the reply
 
 Why the lock: if two messages from the same user ran at once, their
 messages would interleave in the history (a tool_use from one run
@@ -31,7 +33,7 @@ from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel
 
-from agent import actions, memory
+from agent import actions, memory, usage
 from agent.agents import orchestrator
 from agent.agents.loop import LLM_FAILURES, Budget, Run
 from agent.auth import CurrentUser
@@ -103,7 +105,26 @@ async def chat(
     if len(text) > 4000:
         raise HTTPException(400, "message is too long (max 4000 characters)")
 
+    settings = get_settings()
     async with conversation_lock(pool, caller.user_id) as conn:
+        # Guardrail (2i.2): over a limit → 429 before any model is called.
+        try:
+            await usage.check_and_count(conn, caller.user_id, settings)
+        except usage.LimitReached as exc:
+            log.warning("limit reached", extra={"action": "rate_limited", "error": exc.message})
+            # Retry-After: the standard header saying how many seconds to wait.
+            raise HTTPException(
+                429, exc.message, headers={"Retry-After": str(exc.retry_after)}
+            ) from None
+
+        run = Run(
+            llm=llm,
+            settings=settings,
+            todos=todos,
+            caller=caller,
+            # One budget for ALL agents working on this message.
+            budget=Budget(settings.agent_max_steps),
+        )
         try:
             conversation_id = await memory.get_or_create_conversation(conn, caller.user_id)
             history = await memory.load_history(conn, conversation_id)
@@ -115,19 +136,13 @@ async def chat(
             async def save(message: dict) -> None:
                 await memory.append_message(conn, conversation_id, message)
 
-            settings = get_settings()
-            run = Run(
-                llm=llm,
-                settings=settings,
-                todos=todos,
-                caller=caller,
-                # One budget for ALL agents working on this message.
-                budget=Budget(settings.agent_max_steps),
-            )
             reply = await orchestrator.run(run, history, save)
         except LLM_FAILURES as exc:  # the orchestrator's own model call failed
             log.error("llm call failed", extra={"action": "llm_fail", "error": str(exc)[:300]})
             raise HTTPException(502, "agent failed to respond") from None  # Go api's message
+        finally:
+            # Calls that happened cost money even if the run failed halfway.
+            await usage.add_cost(conn, caller.user_id, run.llm_calls, run.cost_usd)
 
         pending = None
         if run.pending_deletes:  # the agent proposed deletions: wait for the user's click

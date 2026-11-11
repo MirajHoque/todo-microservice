@@ -39,7 +39,7 @@ from agent.db import open_pool
 from agent.llm import create_llm
 from agent.log import get_logger, request_id_var, setup_logging
 from agent.migrate import migrate
-from agent.routes import actions, chat, conversation, health
+from agent.routes import actions, chat, conversation, health, usage
 from agent.todo_client import TodoClient
 
 log = get_logger(__name__)
@@ -102,10 +102,11 @@ def create_app() -> FastAPI:
             request_id_var.reset(token)  # this request is done; forget its ID
 
     # ── Errors in the shared shape ───────────────────────────
-    def error_response(status: int, message: str) -> JSONResponse:
+    def error_response(status: int, message: str, headers=None) -> JSONResponse:
         return JSONResponse(
             status_code=status,
             content={"error": message, "request_id": request_id_var.get()},
+            headers=headers,  # e.g. Retry-After on a 429
         )
 
     @app.exception_handler(HTTPException)
@@ -114,7 +115,7 @@ def create_app() -> FastAPI:
         message = str(exc.detail)
         if message == HTTPStatus(exc.status_code).phrase:
             message = message.lower()  # FastAPI's own "Not Found" → "not found", like Go
-        return error_response(exc.status_code, message)
+        return error_response(exc.status_code, message, getattr(exc, "headers", None))
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -133,6 +134,7 @@ def create_app() -> FastAPI:
     app.include_router(conversation.router)
     app.include_router(chat.router)
     app.include_router(actions.router)
+    app.include_router(usage.router)
 
     log.info("starting agent", extra={"addr": f"{settings.host}:{settings.port}"})
     return app

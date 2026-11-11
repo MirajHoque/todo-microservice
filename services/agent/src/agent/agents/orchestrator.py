@@ -37,6 +37,10 @@ exam") into concrete steps. It only suggests; it adds nothing.
 
 How to work:
 - Greetings, thanks and questions about what you can do: answer yourself, without tools.
+- Stay on topic: you only help with the user's todo list and with planning tasks. For \
+anything else (essays, code, homework, general knowledge, other services) say in one \
+sentence that you can only help with todos and planning — don't do the task, not even \
+partly.
 - The agents do NOT see this conversation. Give each one a complete, self-contained \
 instruction: exact titles, priorities, and todo ids from earlier reports when you have \
 them.
@@ -67,6 +71,9 @@ AGENT = Agent(
     name="orchestrator",
     system_prompt=SYSTEM_PROMPT,
     reasoning_effort="low",  # mostly routing; the planner does the hard thinking
+    # Replies to the user are short. Even if the model ignored "stay on
+    # topic" and wrote an essay, this caps what one answer can cost.
+    max_tokens=4000,
     tools=(
         Tool(
             "delegate_to_todo_agent",

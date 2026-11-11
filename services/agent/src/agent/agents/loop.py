@@ -96,6 +96,10 @@ class Run:
     # deleted during the run: routes/chat.py turns these into a pending
     # action, and only the user's Confirm click deletes (step 2i.1).
     pending_deletes: list[dict[str, str]] = field(default_factory=list)
+    # What this message's LLM calls cost, all agents together (step 2i.2,
+    # counted towards the user's daily cost cap in usage.py).
+    llm_calls: int = 0
+    cost_usd: float = 0.0
 
 
 # A tool's Python side: gets the Run and the model's arguments, returns
@@ -212,6 +216,8 @@ class Agent:
             raise LLMError("the model returned no answer")
         choice = result.choices[0]
         usage = result.usage
+        run.llm_calls += 1
+        run.cost_usd += (usage.cost or 0.0) if usage else 0.0  # OpenRouter's real price
         log.info(
             "llm call",
             extra={

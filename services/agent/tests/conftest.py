@@ -50,7 +50,7 @@ def db_client(database_url: str):
     with TestClient(app) as client:
         yield client
     with psycopg.connect(database_url) as conn:
-        conn.execute("TRUNCATE conversations, messages, pending_actions")
+        conn.execute("TRUNCATE conversations, messages, pending_actions, usage")
 
 
 @pytest.fixture

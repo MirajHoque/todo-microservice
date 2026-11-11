@@ -62,9 +62,11 @@ docker run --rm -p 8083:8083 \
 | `POST /api/v1/agent/chat` | JWT | `{"message": "..."}` → `{"reply": "..."}` (+ `pending_action` when a deletion waits for the user) |
 | `POST /api/v1/agent/actions/{id}/confirm` | JWT | The user pressed **Confirm**: delete the proposed todos → `{"reply": "..."}` |
 | `DELETE /api/v1/agent/actions/{id}` | JWT | The user pressed **Cancel**: delete nothing → `{"reply": "..."}` |
+| `GET /api/v1/agent/usage` | JWT | Messages this hour and AI cost today, with the limits |
 
 Chat errors: `400 message is required`, `409 still answering your previous message`
-(one message at a time per user), `502 agent failed to respond` (the LLM failed).
+(one message at a time per user), `429` rate limit or daily cost cap reached (with a
+`Retry-After` header), `502 agent failed to respond` (the LLM failed).
 
 ## The agents (`src/agent/agents/`)
 
@@ -128,6 +130,15 @@ instruction hidden in a todo title, can't delete anything. A typed "yes" doesn't
 count either. The action works once (`DELETE … RETURNING`), only for its owner,
 for 10 minutes; a newer proposal or logout replaces/removes it.
 
+**Rate limit and daily cost cap (`usage.py`).** Before a message reaches any
+model, the chat checks the `usage` table: at most `CHAT_MESSAGES_PER_HOUR`
+messages in the current clock hour, and at most `DAILY_COST_LIMIT_USD` of LLM
+cost since midnight UTC — counting the calls of *all* agents. Over a limit →
+`429` with `Retry-After`, and no money is spent. Stored in Postgres (every
+replica sees the same numbers) and not tied to the conversation, so logging out
+doesn't reset it. The cost is known only after a message, so the last one of the
+day can go over by one message's worth (kept small by `AGENT_MAX_STEPS`).
+
 ### Switching models / providers
 
 Set `AGENT_MODEL` in `.env` to any id from https://openrouter.ai/models that
@@ -149,6 +160,8 @@ Each `llm call` log line shows the `model` that answered and its `cost_usd`.
 | `LLM_MAX_TOKENS` | 16000 | OpenRouter reserves credit for this maximum — lower it if you get a 402 "requires more credits" |
 | `LLM_RETRY_SECONDS` | 10 | The SDK retries 5xx/network errors; its own default is one hour |
 | `AGENT_MAX_STEPS` | 20 | Max LLM calls per chat message, all agents together |
+| `CHAT_MESSAGES_PER_HOUR` | 30 | Per user, per clock hour (429 above it) |
+| `DAILY_COST_LIMIT_USD` | 0.50 | Per user, midnight to midnight UTC (429 above it) |
 
 ## Calling the api (todos)
 
@@ -229,6 +242,7 @@ that has already run.
 | `src/agent/memory.py` | SQL for conversations/messages (load, append, clear) |
 | `src/agent/todo_client.py` | HTTP client for the api's todo endpoints, as the user |
 | `src/agent/actions.py` | Pending actions: deletions waiting for the user's Confirm |
+| `src/agent/usage.py` | Rate limit + daily cost cap, per user |
 | `src/agent/llm.py` | The LLM client (official OpenRouter SDK, with our retry policy) |
 | `src/agent/agents/loop.py` | The agent loop every agent runs; `Agent`, `Tool`, step `Budget` |
 | `src/agent/agents/orchestrator.py` | The agent the user talks to; delegates to the others |
@@ -236,12 +250,13 @@ that has already run.
 | `src/agent/agents/planner.py` | The planner agent (read-only) |
 | `src/agent/migrate.py` | Applies `migrations/*.sql` at startup |
 | `src/agent/migrations/` | Numbered SQL files (the schema, step by step) |
-| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py`, `chat.py`, `actions.py` (Confirm/Cancel) |
+| `src/agent/routes/` | HTTP handlers: `health.py`, `conversation.py`, `chat.py`, `actions.py` (Confirm/Cancel), `usage.py` |
 | `tests/conftest.py` | Shared test setup: uses `agent_db_test` + a test JWT secret; skips DB tests if Postgres is down |
 | `tests/helpers.py` | `make_token()` / `auth()` to build good and bad tokens in tests |
 | `tests/fakes.py` | The fake model (one script per agent) and fake todo api; the `chat` fixture is in `conftest.py` |
 | `tests/test_chat.py` | All three agents end to end, no money spent |
 | `tests/test_actions.py` | The delete guardrail: the model alone can't delete |
+| `tests/test_limits.py` | Rate limit and daily cost cap |
 | `tests/` | Tests, run in-process with FastAPI's TestClient |
 
 ## Conventions shared with the other services

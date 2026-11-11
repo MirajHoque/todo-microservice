@@ -24,7 +24,13 @@ request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)  # set by auth.py
 
 # Attributes every LogRecord has. Anything else came from extra={...}.
-_STANDARD = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime", "taskName"}
+# color_message: uvicorn's copy of msg with terminal colour codes.
+_STANDARD = set(logging.makeLogRecord({}).__dict__) | {
+    "message",
+    "asctime",
+    "taskName",
+    "color_message",
+}
 
 
 class JSONFormatter(logging.Formatter):
@@ -68,6 +74,12 @@ def setup_logging(level: str, fmt: str, env: str) -> None:
     for name in ("uvicorn", "uvicorn.error"):
         logging.getLogger(name).handlers = []
         logging.getLogger(name).propagate = True
+
+    # The HTTP clients log every request ("HTTP Request: POST …") at INFO.
+    # We already log each call ourselves with more useful fields
+    # ("llm call", "todo api call"), so only show their warnings.
+    for name in ("httpx", "httpx2", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

@@ -6,8 +6,8 @@ It owns the agents (orchestrator, todo agent, planner) and their memory
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
-- Status: 2g — orchestrator + todo agent + planner agent. web's chat comes
-  here (`web/proxy.ts` sends `/api/v1/agent/...` to `AGENT_URL`).
+- Status: step 2 done — orchestrator + todo agent + planner agent; web's chat
+  comes here (`web/proxy.ts` sends `/api/v1/agent/...` to `AGENT_URL`).
 
 ## Run it
 
@@ -27,6 +27,29 @@ Check:
 - `curl localhost:8083/health/ready` → `"status":"ready"` (database reachable; 503 if not)
 
 While `ENV=development`, interactive API docs are at http://localhost:8083/docs.
+
+## Run it in Docker
+
+The `Dockerfile` builds a small production image (uv installs exactly what
+`uv.lock` says; no dev tools, tests or `.env` inside; non-root user;
+healthcheck). Kubernetes will use this image in step 4.
+
+```bash
+docker build -t todo-agent services/agent/          # from the repo root
+docker run --rm -p 8083:8083 \
+  --env-file services/agent/.env \
+  -e ENV=production \
+  -e DATABASE_URL=postgresql://agent:agent@host.docker.internal:5433/agent_db \
+  -e API_URL=http://host.docker.internal:8080 \
+  todo-agent
+```
+
+- `--env-file` passes your settings (secrets included) at **run** time — they
+  are never baked into the image.
+- `ENV=production` overrides your `.env`'s `development`: no auto-reload, no `/docs`.
+- `host.docker.internal` means "your Mac" from inside a container (`localhost`
+  there is the container itself). Keep Postgres, the api and web running as usual;
+  web finds the container at `localhost:8083` as before.
 
 ## Endpoints
 

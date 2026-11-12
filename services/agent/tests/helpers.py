@@ -22,7 +22,7 @@ def make_token(
     expires_in: int = 3600,
     issuer: str = "todo-app",
 ) -> str:
-    """Build a token like the Go api does (override parts to make bad ones)."""
+    """Build a token like the auth service does (override parts to make bad ones)."""
     now = int(time.time())
     claims = {
         "user_id": user_id or str(uuid.uuid4()),

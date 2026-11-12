@@ -44,7 +44,7 @@ def test_delete_only_proposes(chat):
     assert body["reply"] == "Press Confirm to delete them."
     assert [t["title"] for t in body["pending_action"]["todos"]] == ["Buy milk"]
     assert "t1" in api.todos  # NOT deleted …
-    assert "DELETE" not in [method for method, _ in api.seen]  # … the api never got a DELETE
+    assert "DELETE" not in [method for method, _ in api.seen]  # … the service never got a DELETE
     result = model.calls("todo")[1]["messages"][-1]["content"]
     assert "NOT deleted" in result  # the model is told so
 
@@ -58,7 +58,7 @@ def test_confirm_deletes_once(db_client, chat):
     res = db_client.post(f"{ACTIONS}/{action['id']}/confirm", headers=auth(token))
     assert res.status_code == 200
     assert res.json() == {"reply": 'Deleted "Buy milk".'}
-    assert api.todos == {}  # deleted — through the api, as the user
+    assert api.todos == {}  # deleted — through the todo service, as the user
     assert ("DELETE", f"Bearer {token}") in api.seen
 
     # The orchestrator will know on the next message.
@@ -155,7 +155,7 @@ def test_actions_need_a_token_and_a_valid_id(db_client):
     assert db_client.post(f"{ACTIONS}/{some_id}/confirm").status_code == 401
     assert (
         db_client.post(f"{ACTIONS}/not-a-uuid/confirm", headers=auth(make_token())).status_code
-        == 400  # validation errors are 400, like the Go api
+        == 400  # validation errors are 400, like the Go services
     )
 
 

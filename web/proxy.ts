@@ -3,7 +3,7 @@
 //
 //   browser ──▶ web:3000/api/v1/auth/...  ──▶ AUTH_URL/api/v1/auth/...    (Go auth service)
 //   browser ──▶ web:3000/api/v1/agent/... ──▶ AGENT_URL/api/v1/agent/...  (Python agent)
-//   browser ──▶ web:3000/api/v1/...       ──▶ API_URL/api/v1/...          (Go api: todos)
+//   browser ──▶ web:3000/api/v1/todos/... ──▶ TODO_URL/api/v1/todos/...   (Go todo service)
 //
 // The browser only ever talks to web (one address). Which service
 // answers is decided HERE, by the path. This is the same job a
@@ -18,7 +18,7 @@
 // the build output — so the URLs would be frozen inside the Docker
 // image. Proxy runs per request and reads the env vars when the
 // container *starts*. One image works everywhere: on your Mac
-// (localhost:8080), in Docker, on Kubernetes (http://api:8080).
+// (localhost:8082), in Docker, on Kubernetes (http://todo:8082).
 //
 // Why a proxy at all: the browser sees one address, so the
 // services need no CORS headers and the browser never learns where
@@ -28,13 +28,13 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-// Which service owns which path. First match wins, so the more
-// specific prefix comes first; everything else goes to the api.
-// Step 3b added /api/v1/auth → auth; step 3c adds /api/v1/todos → todo.
+// Which service owns which path — one row per backend service.
+// There is no "everything else" row any more: since step 3c every
+// path has exactly one owner (the monolith that took the rest is gone).
 const ROUTES = [
   { prefix: "/api/v1/auth", env: "AUTH_URL", fallback: "http://localhost:8081" },
+  { prefix: "/api/v1/todos", env: "TODO_URL", fallback: "http://localhost:8082" },
   { prefix: "/api/v1/agent", env: "AGENT_URL", fallback: "http://localhost:8083" },
-  { prefix: "/api", env: "API_URL", fallback: "http://localhost:8080" },
 ] as const;
 
 export function proxy(request: NextRequest) {
@@ -42,7 +42,10 @@ export function proxy(request: NextRequest) {
 
   // "/api/v1/agent" or "/api/v1/agent/…" — but not "/api/v1/agents".
   const route = ROUTES.find((r) => pathname === r.prefix || pathname.startsWith(r.prefix + "/"));
-  if (!route) return NextResponse.next(); // can't happen: the matcher only sends /api/...
+
+  // No service owns this path: answer 404 here, in the same JSON shape
+  // the services use for errors (lib/api.ts shows `error` to the user).
+  if (!route) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   // Read at request time — not baked in at build time.
   const base = process.env[route.env] ?? route.fallback;

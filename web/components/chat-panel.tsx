@@ -4,7 +4,7 @@
 // You type a message → chat() sends POST /api/v1/agent/chat →
 // proxy.ts forwards it to the Python agent service (AGENT_URL),
 // which may add / complete / delete todos with its tools (through
-// the Go api). So after every reply we call onAgentReplied() and
+// the Go todo service). So after every reply we call onAgentReplied() and
 // the page reloads the list.
 //
 // The conversation shown here lives only in this component (gone

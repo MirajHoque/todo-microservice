@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ============================================================
-# Multi-stage Dockerfile for todo-app
+# Multi-stage Dockerfile for the todo service
 #
 # Stage 1 (builder) — full Go toolchain, compiles the binary
 # Stage 2 (runtime) — distroless, only the binary
@@ -8,16 +8,16 @@
 # Migrations are embedded in the binary
 # (go:embed), so the runtime image needs nothing else.
 #
-# Build — from the REPO ROOT, not from services/api (step 3a):
-# the api imports the shared library in libs/go, so the build must
+# Build — from the REPO ROOT, not from services/todo (step 3a):
+# todo imports the shared library in libs/go, so the build must
 # be able to see both folders. "-f" says where this Dockerfile is,
 # the final "." is the build context (= the repo root).
 #
-#   docker build -f services/api/Dockerfile \
+#   docker build -f services/todo/Dockerfile \
 #                --build-arg VERSION=$(git describe --tags --always) \
-#                --build-arg REVISION=$(git rev-parse HEAD) -t todo-app .
+#                --build-arg REVISION=$(git rev-parse HEAD) -t todo-todo .
 #
-# What is left out of the context: services/api/Dockerfile.dockerignore
+# What is left out of the context: services/todo/Dockerfile.dockerignore
 # ============================================================
 
 # Keep in sync with the `go` line in go.mod.
@@ -35,7 +35,7 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS builder
 
 # Same folder layout as the repo, so the "replace ../../libs/go"
 # line in go.mod finds the shared library inside the image too.
-WORKDIR /src/services/api
+WORKDIR /src/services/todo
 
 # Copy dependency files first — this layer is cached until
 # go.mod/go.sum change. The cache mount keeps downloaded modules
@@ -43,12 +43,12 @@ WORKDIR /src/services/api
 # The shared library's go.mod is needed too: `go mod download`
 # reads it to know the library's own dependencies.
 COPY libs/go/go.mod libs/go/go.sum /src/libs/go/
-COPY services/api/go.mod services/api/go.sum ./
+COPY services/todo/go.mod services/todo/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
   go mod download && go mod verify
 
 COPY libs/go /src/libs/go
-COPY services/api .
+COPY services/todo .
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -63,7 +63,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
   CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
   go build -trimpath \
   -ldflags="-s -w -X main.version=${VERSION}" \
-  -o /out/todo-app \
+  -o /out/todo \
   ./cmd/server
 
 # ── Stage 2: Runtime ─────────────────────────────────────────
@@ -73,27 +73,27 @@ FROM ${RUNTIME_IMAGE} AS runtime
 
 ARG VERSION=dev
 ARG REVISION=unknown
-LABEL org.opencontainers.image.title="todo-app" \
+LABEL org.opencontainers.image.title="todo-todo" \
   org.opencontainers.image.source="https://github.com/MirajHoque/todo-microservice" \
   org.opencontainers.image.version="${VERSION}" \
   org.opencontainers.image.revision="${REVISION}"
 
 WORKDIR /app
 
-COPY --from=builder --chown=nonroot:nonroot /out/todo-app /app/todo-app
+COPY --from=builder --chown=nonroot:nonroot /out/todo /app/todo
 
 # Numeric UID so Kubernetes `runAsNonRoot` can verify it.
 USER 65532:65532
 
-EXPOSE 8080
+EXPOSE 8082
 
 # No wget/curl in distroless — the binary checks itself.
 # (On Kubernetes, use liveness/readiness probes on /health and
 # /health/ready instead; they ignore HEALTHCHECK.)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD ["/app/todo-app", "healthcheck"]
+  CMD ["/app/todo", "healthcheck"]
 
 # Exec form — the app is PID 1 and receives SIGTERM directly,
 # which triggers the graceful shutdown in main.go.
 # Logs go to stdout/stderr; Alloy reads them via the Docker driver.
-ENTRYPOINT ["/app/todo-app"]
+ENTRYPOINT ["/app/todo"]

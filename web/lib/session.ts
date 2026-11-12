@@ -3,8 +3,7 @@
 //
 // After login the API returns a JWT. The browser must send it on
 // every protected request ("Authorization: Bearer <token>"), so we
-// keep it in localStorage — the same place the old Go-rendered
-// pages (services/api/web/templates) keep it.
+// keep it in localStorage.
 //
 // localStorage only exists in the browser, not on the Next.js
 // server, so every function checks for `window` first.

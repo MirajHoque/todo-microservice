@@ -1,6 +1,6 @@
 """migrate.py — applies the SQL files in migrations/ at startup.
 
-How it works (same idea as services/api/internal/db/migrate.go):
+How it works (same idea as libs/go/postgres/migrate.go):
   1. a table `schema_migrations` remembers which files already ran
   2. files are applied in name order: 001_..., 002_..., ...
   3. the whole run is ONE transaction: if any file fails, everything

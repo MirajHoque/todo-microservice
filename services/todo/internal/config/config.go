@@ -1,4 +1,4 @@
-// Package config loads all application configuration from environment variables.
+// Package config loads the todo service's configuration from environment variables.
 // We never hardcode secrets. Every value has a clear default or panics loudly
 // at startup if it's missing — fail fast, fail clearly.
 package config
@@ -21,7 +21,7 @@ type Config struct {
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
 
-	// Database (Azure PostgreSQL)
+	// Database (todo_db — this service's own database)
 	DatabaseURL   string
 	DBMaxConns    int32
 	DBMinConns    int32
@@ -43,7 +43,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		// Server defaults
 		Host:         getEnv("HOST", "0.0.0.0"),
-		Port:         getEnv("PORT", "8080"),
+		Port:         getEnv("PORT", "8082"),
 		Env:          getEnv("ENV", "development"),
 		ReadTimeout:  getDuration("SERVER_READ_TIMEOUT", 10*time.Second),
 		WriteTimeout: getDuration("SERVER_WRITE_TIMEOUT", 30*time.Second),

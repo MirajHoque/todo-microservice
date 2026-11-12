@@ -46,7 +46,7 @@ def test_a_fooled_model_still_cannot_delete(chat):
     body = send("what's on my list?").json()
 
     assert len(api.todos) == 3  # nothing deleted …
-    assert "DELETE" not in [method for method, _ in api.seen]  # … not even attempted at the api
+    assert "DELETE" not in [method for method, _ in api.seen]  # … not even attempted
     # The attempt became a proposal: the user sees "Delete 3 todos?" next to
     # an answer they never asked for — and can press Cancel.
     assert len(body["pending_action"]["todos"]) == 3

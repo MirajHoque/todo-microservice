@@ -1,6 +1,6 @@
-# What `docker build -f services/api/Dockerfile .` may NOT see.
+# What `docker build -f services/todo/Dockerfile .` may NOT see.
 #
-# The build context is the repo root (the api needs libs/go), so this
+# The build context is the repo root (todo needs libs/go), so this
 # file lists paths from the repo root. Docker picks it up automatically
 # because it is named <Dockerfile name>.dockerignore and sits next to
 # the Dockerfile — each service can have its own.
@@ -10,7 +10,7 @@
 # accident.
 *
 !libs/go
-!services/api
+!services/todo
 
 # …and inside those two folders, still leave out:
 

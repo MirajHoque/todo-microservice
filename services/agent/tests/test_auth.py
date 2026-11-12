@@ -1,6 +1,6 @@
 """Auth tests: every way a token can be wrong must give a 401.
 
-Messages match the Go api's middleware exactly, so clients see the
+Messages match the Go services' middleware exactly, so clients see the
 same behaviour from every service.
 """
 

@@ -7,7 +7,7 @@
 // WHY ONLY CHECKING?
 // Creating a token ("this person just logged in") is the auth
 // service's job alone, so that code stays inside the auth service
-// (today: services/api/internal/auth). Checking a token is needed by
+// (services/auth/internal/auth). Checking a token is needed by
 // every service, so it lives here.
 //
 //	auth service ── CreateToken ──▶ token ──▶ browser

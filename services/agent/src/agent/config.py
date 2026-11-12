@@ -5,7 +5,7 @@ the same name (case-insensitive), falling back to the .env file,
 then to the default here. Wrong types fail at startup, not later:
 PORT=abc stops the service with a clear error.
 
-Same idea as services/api/internal/config/config.go.
+Same idea as services/todo/internal/config/config.go.
 """
 
 from functools import lru_cache
@@ -20,26 +20,26 @@ class Settings(BaseSettings):
 
     # Server
     host: str = "0.0.0.0"
-    port: int = 8083  # api is 8080; auth/todo will get 8081/8082 in step 3
+    port: int = 8083  # auth is 8081, todo is 8082
     env: Literal["development", "production"] = "development"
 
     # Database — the agent's OWN database (agent_db), as its own user.
-    # It can't connect to the api's `todo` database (see db/init.sql).
+    # It can't connect to the todo service's `todo_db` database (see db/init.sql).
     database_url: str = "postgresql://agent:agent@localhost:5433/agent_db"
     db_min_conns: int = 1
     db_max_conns: int = 10  # a chat holds one connection while it runs (see routes/chat.py)
 
-    # Auth — the SAME secret the api signs tokens with (HS256, shared
+    # Auth — the SAME secret the auth service signs tokens with (HS256, shared
     # secret; see ROADMAP "Auth"). No default on purpose: without it the
     # service refuses to start instead of accepting forged tokens.
     # At least 32 characters: a short secret can be brute-forced, and
     # then anyone can forge tokens. (`openssl rand -base64 32` → 44.)
     jwt_secret: str = Field(min_length=32)
-    jwt_issuer: str = "todo-app"  # the api sets iss="todo-app"
+    jwt_issuer: str = "todo-app"  # the auth service sets iss="todo-app"
 
     # The api service that owns todos. The agent never touches the
     # todos table — its tools call this over HTTP, as the user.
-    api_url: str = "http://localhost:8080"
+    todo_url: str = "http://localhost:8082"
     api_timeout_seconds: float = 10.0
 
     # The LLM — via OpenRouter's unified API, so ANY model from any

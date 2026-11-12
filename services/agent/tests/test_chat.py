@@ -67,7 +67,7 @@ def test_todo_task_is_delegated_and_everything_is_stored(chat):
         "delete_todo",
     ]
 
-    # The todo was really created — through the api, as the user.
+    # The todo was really created — through the todo service, as the user.
     assert [t["title"] for t in api.todos.values()] == ["Buy milk"]
     assert api.seen[0][1].startswith("Bearer ey")  # the user's own JWT
 
@@ -123,7 +123,7 @@ def test_todo_agent_errors_reach_the_orchestrator(chat):
         ],
     )
     assert send("finish my report").json()["reply"] == "I couldn't find that todo."
-    assert model.calls("todo")[1]["messages"][-1]["content"] == "error: todo not found"  # the api's
+    assert model.calls("todo")[1]["messages"][-1]["content"] == "error: todo not found"
     assert model.calls("orchestrator")[1]["messages"][-1]["content"] == "Error: todo not found."
 
 
@@ -196,7 +196,7 @@ def test_planner_plans_but_cannot_change_anything(chat):
     assert first["messages"][1:] == [{"role": "user", "content": "Move flat in May"}]
     # Least privilege: the planner was only given the read-only tool …
     assert [t["function"]["name"] for t in first["tools"]] == ["list_todos"]
-    # … so the api only saw reads, and nothing was added.
+    # … so the todo service only saw reads, and nothing was added.
     assert [method for method, _ in api.seen] == ["GET"]
     assert api.todos == {}
     assert roles(history()) == ["user", "assistant", "tool", "assistant"]

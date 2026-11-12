@@ -1,7 +1,7 @@
 // ============================================================
 // lib/types.ts — the API contract, written as TypeScript types.
 //
-// These mirror the Go structs in services/api/internal/models/
+// These mirror the Go structs in services/auth and services/todo (internal/models/)
 // and the agent's Pydantic models in services/agent/src/agent/routes/.
 // Field names match the JSON field names, so a JSON response can be
 // used directly as one of these types.
@@ -93,5 +93,5 @@ export type ActionResponse = {
 // models.ErrorResponse — the body of every 4xx/5xx from the API
 export type ErrorResponse = {
   error: string;
-  request_id?: string; // matches request_id in the api's logs
+  request_id?: string; // matches request_id in that service's logs
 };

@@ -3,7 +3,7 @@
 Opening a database connection is slow (network + login), so we
 open a few once at startup and reuse them: a *pool*. A request
 borrows a connection, uses it, and gives it back.
-Same idea as pgxpool in services/api/internal/db/db.go.
+Same idea as pgxpool in libs/go/postgres/postgres.go.
 
 The pool is created when the app starts and closed when it stops
 (see `lifespan` in main.py). Routes get it by declaring a parameter
@@ -25,7 +25,7 @@ async def open_pool(settings: Settings) -> AsyncConnectionPool:
     """Open the pool and wait until it really connects.
 
     If the database is unreachable, startup fails right here with a
-    clear error — like the Go api. Better to crash at start than to
+    clear error — like the Go services. Better to crash at start than to
     look "up" and fail every request.
     """
     pool = AsyncConnectionPool(

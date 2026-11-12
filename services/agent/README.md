@@ -1,8 +1,8 @@
 # agent — the AI assistant service (Python / FastAPI)
 
-Extracted from the Go api in step 2 of `docs/ROADMAP.md`.
+Extracted from the Go monolith in step 2 of `docs/ROADMAP.md`.
 It owns the agents (orchestrator, todo agent, planner) and their memory
-(`agent_db`), and calls the api's HTTP endpoints for todos.
+(`agent_db`), and calls the todo service's HTTP endpoints for todos.
 
 - Language: Python 3.15, FastAPI, managed with [uv](https://docs.astral.sh/uv/)
 - Port: **8083**
@@ -40,7 +40,7 @@ docker run --rm -p 8083:8083 \
   --env-file services/agent/.env \
   -e ENV=production \
   -e DATABASE_URL=postgresql://agent:agent@host.docker.internal:5433/agent_db \
-  -e API_URL=http://host.docker.internal:8080 \
+  -e TODO_URL=http://host.docker.internal:8082 \
   todo-agent
 ```
 
@@ -48,7 +48,7 @@ docker run --rm -p 8083:8083 \
   are never baked into the image.
 - `ENV=production` overrides your `.env`'s `development`: no auto-reload, no `/docs`.
 - `host.docker.internal` means "your Mac" from inside a container (`localhost`
-  there is the container itself). Keep Postgres, the api and web running as usual;
+  there is the container itself). Keep Postgres, the todo service and web running as usual;
   web finds the container at `localhost:8083` as before.
 
 ## Endpoints
@@ -179,7 +179,7 @@ Each `llm call` log line shows the `model` that answered and its `cost_usd`.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `OPENROUTER_API_KEY` | — (required) | Copy from `services/api/.env` without printing it: `grep '^OPENROUTER_API_KEY=' ../api/.env >> .env` |
+| `OPENROUTER_API_KEY` | — (required) | From https://openrouter.ai/keys — paste it into `.env`, never into a command or a commit |
 | `AGENT_MODEL` | `anthropic/claude-sonnet-5.5` | Any OpenRouter model id |
 | `LLM_MAX_TOKENS` | 16000 | OpenRouter reserves credit for this maximum — lower it if you get a 402 "requires more credits" |
 | `LLM_RETRY_SECONDS` | 10 | The SDK retries 5xx/network errors; its own default is one hour |
@@ -187,19 +187,19 @@ Each `llm call` log line shows the `model` that answered and its `cost_usd`.
 | `CHAT_MESSAGES_PER_HOUR` | 30 | Per user, per clock hour (429 above it) |
 | `DAILY_COST_LIMIT_USD` | 0.50 | Per user, midnight to midnight UTC (429 above it) |
 
-## Calling the api (todos)
+## Calling the todo service
 
-The `todos` table belongs to the api service; this service can't even
-connect to that database. Its tools change todos through the api's HTTP
-endpoints, via `src/agent/todo_client.py` (`API_URL`, default
-`http://localhost:8080`):
+The `todos` table belongs to the todo service; this service can't even
+connect to that database. Its tools change todos through the todo service's HTTP
+endpoints, via `src/agent/todo_client.py` (`TODO_URL`, default
+`http://localhost:8082`):
 
 | Header sent | Why |
 |---|---|
-| `Authorization: Bearer <the user's JWT>` | The agent acts **as the user**, with no extra power — the api checks ownership exactly as for web, so even a tricked LLM can only touch this user's todos |
+| `Authorization: Bearer <the user's JWT>` | The agent acts **as the user**, with no extra power — the todo service checks ownership exactly as for web, so even a tricked LLM can only touch this user's todos |
 | `X-Request-ID: <same id>` | One chat message can be followed through both services' logs |
 
-Api errors come back as `TodoAPIError(status, message)` with the api's own
+Api errors come back as `TodoAPIError(status, message)` with the todo service's own
 message ("todo not found", …); api down → 503, too slow → 504.
 
 ## Auth
@@ -207,16 +207,16 @@ message ("todo not found", …); api down → 503, too slow → 504.
 This service has no users and never sees passwords. The auth service
 (`services/auth`) issues a JWT at login; this service only **verifies** it (`src/agent/auth.py`):
 signature (shared `JWT_SECRET`), algorithm HS256 only, not expired,
-issuer `todo-app`, and reads `user_id` from it. Errors match the Go api:
+issuer `todo-app`, and reads `user_id` from it. Errors match the Go services:
 `missing authorization header`, `authorization header must be: Bearer <token>`,
 `token is invalid`, `token has expired` (all 401).
 
-`JWT_SECRET` in `.env` **must be the same value** as in `services/api/.env`,
+`JWT_SECRET` in `.env` **must be the same value** as in `services/auth/.env`,
 and at least 32 characters — otherwise the service refuses to start. Copy it
 without printing it:
 
 ```bash
-grep '^JWT_SECRET=' ../api/.env >> .env   # then delete the placeholder line
+grep '^JWT_SECRET=' ../auth/.env >> .env   # then delete the placeholder line
 ```
 
 (Later, in the RS256 step, only the auth service will hold a private key
@@ -246,7 +246,7 @@ that has already run.
 |---|---|---|
 | `make install` | Install dependencies into `.venv/` | `go mod download` |
 | `make dev` | Run with auto-reload | `make dev` (`go run`) |
-| `make test` | Run tests (`pytest`; DB tests need `make db`, real-api tests need the api and the auth service running — else skipped) | `go test ./...` |
+| `make test` | Run tests (`pytest`; DB tests need `make db`, real-service tests need the todo and auth services running — else skipped) | `go test ./...` |
 | `make lint` | Lint + format check (`ruff`) | `go vet` + `gofmt -l` |
 | `make fmt` | Fix formatting | `gofmt -w` |
 
@@ -260,11 +260,11 @@ that has already run.
 | `src/agent/__main__.py` | Entry point: `python -m agent` starts the server |
 | `src/agent/main.py` | Builds the app: middleware (request ID, logging), error shape, routes |
 | `src/agent/config.py` | Settings from env / `.env` |
-| `src/agent/log.py` | JSON logs with the same field names as the Go api |
+| `src/agent/log.py` | JSON logs with the same field names as the Go services |
 | `src/agent/db.py` | Database connection pool; `Pool` dependency for routes |
 | `src/agent/auth.py` | JWT check; `CurrentUser` dependency → the caller's user id |
 | `src/agent/memory.py` | SQL for conversations/messages (load, append, clear) |
-| `src/agent/todo_client.py` | HTTP client for the api's todo endpoints, as the user |
+| `src/agent/todo_client.py` | HTTP client for the todo service's todo endpoints, as the user |
 | `src/agent/actions.py` | Pending actions: deletions waiting for the user's Confirm |
 | `src/agent/usage.py` | Rate limit + daily cost cap, per user |
 | `src/agent/llm.py` | The LLM client (official OpenRouter SDK, with our retry policy) |
@@ -285,7 +285,7 @@ that has already run.
 
 ## Conventions shared with the other services
 
-- Errors: `{"error": "...", "request_id": "..."}` (same as the Go api).
+- Errors: `{"error": "...", "request_id": "..."}` (same as the Go services).
 - `X-Request-ID`: reused from the caller, or generated; returned in the response
   and included in every log line.
 - Log fields: `service`, `env`, `request_id`, `user_id`, `method`, `path`,

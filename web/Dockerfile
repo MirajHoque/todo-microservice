@@ -9,13 +9,13 @@
 # The final image has no source code, no dev dependencies and
 # no build tools — just Node and the standalone server.
 #
-# AUTH_URL / API_URL / AGENT_URL are NOT baked in: proxy.ts reads
+# AUTH_URL / TODO_URL / AGENT_URL are NOT baked in: proxy.ts reads
 # them when the container starts, so the same image runs anywhere:
 #
 #   docker build -t todo-web web/
 #   docker run --rm -p 3000:3000 \
 #     -e AUTH_URL=http://host.docker.internal:8081 \
-#     -e API_URL=http://host.docker.internal:8080 \
+#     -e TODO_URL=http://host.docker.internal:8082 \
 #     -e AGENT_URL=http://host.docker.internal:8083 todo-web
 #
 # (host.docker.internal = "your Mac" as seen from inside a container;

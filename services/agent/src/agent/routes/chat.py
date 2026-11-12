@@ -101,7 +101,7 @@ async def chat(
 ) -> ChatResponse:
     text = body.message.strip()
     if not text:
-        raise HTTPException(400, "message is required")  # same message as the Go api
+        raise HTTPException(400, "message is required")  # same message as the Go services
     if len(text) > 4000:
         raise HTTPException(400, "message is too long (max 4000 characters)")
 
@@ -139,7 +139,7 @@ async def chat(
             reply = await orchestrator.run(run, history, save)
         except LLM_FAILURES as exc:  # the orchestrator's own model call failed
             log.error("llm call failed", extra={"action": "llm_fail", "error": str(exc)[:300]})
-            raise HTTPException(502, "agent failed to respond") from None  # Go api's message
+            raise HTTPException(502, "agent failed to respond") from None  # the monolith's message
         finally:
             # Calls that happened cost money even if the run failed halfway.
             await usage.add_cost(conn, caller.user_id, run.llm_calls, run.cost_usd)

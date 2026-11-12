@@ -52,9 +52,8 @@ Routing (via Gateway API): `/` → web, `/api/auth` → auth, `/api/todos` → t
 - [ ] **3. Split `services/api` into `services/auth` + `services/todo`** — database per service, shared code to `libs/go/`
   - [x] 3a. Shared Go code to `libs/go/` (own module): `logger`, `middleware`, `jwtauth` (JWT *checking* only — creating tokens stays with auth). The api imports it through a `replace` line in `go.mod`; its Docker image is now built from the repo root. First Go tests.
   - [x] 3b. `services/auth` (port 8081, `auth_db`): register, login, logout, with tests against `auth_db_test`; `proxy.ts` sends `/api/v1/auth` there. Auth code, the old Go HTML pages and the `todos → users` foreign key are removed from the api (user id comes from the JWT); existing users copied with `make db-copy-users`. `libs/go` gains `postgres`, `respond`, `health`; Go 401s now carry a `request_id`.
-  - [ ] 3c. `services/todo` (port 8082, `todo_db`): what is left of the api (todo CRUD) becomes the todo service on the shared library; web and the agent point at it
-  - [ ] 3d. Move the existing todos to `todo_db`; delete `services/api` and its `todo` database (incl. the old `users` table)
-  - [ ] 3e. Docs clean-up
+  - [x] 3c. `services/api` renamed to `services/todo` (port 8082, own database `todo_db`, db user `todo_svc`), now on the shared library, with tests against `todo_db_test`; existing todos copied with `make db-copy-todos`. web (`TODO_URL`) and the agent (`TODO_URL`, was `API_URL`) point at it; `proxy.ts` has one row per service and no catch-all. Bad input on update is a 400 and a non-UUID id a 404 (both were 500s).
+  - [ ] 3d. Clean-up: drop the old monolith tables (`users`, `todos`, `schema_migrations`) from the admin `todo` database and remove the one-time `db-copy-*` targets; final docs pass; tag `v0.3.0`
 - [ ] **3½. Compose for the whole system** — bring `compose.yaml` back (it is parked until now) so every service plus Postgres starts with one command. Until this step each service runs natively in its own terminal (see `docs/LOCAL_DEV.md`).
 - [ ] **4. Local Kubernetes** (kind or k3d) with Kustomize manifests
 - [ ] **5. AKS** — ACR, AKS, Azure Postgres, Gateway API + cert-manager, Key Vault for secrets

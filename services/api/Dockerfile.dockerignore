@@ -1,0 +1,41 @@
+# What `docker build -f services/api/Dockerfile .` may NOT see.
+#
+# The build context is the repo root (the api needs libs/go), so this
+# file lists paths from the repo root. Docker picks it up automatically
+# because it is named <Dockerfile name>.dockerignore and sits next to
+# the Dockerfile — each service can have its own.
+#
+# Approach: ignore EVERYTHING, then allow the two folders the build
+# needs. A new folder in the repo can never leak into the image by
+# accident.
+*
+!libs/go
+!services/api
+
+# …and inside those two folders, still leave out:
+
+# Secrets — never send these to the build context
+**/.env
+**/.env.*
+
+# Docker files themselves (changing them shouldn't bust the COPY cache)
+**/Dockerfile
+**/*.dockerignore
+
+# Build output
+**/bin/
+**/dist/
+
+# Development tools
+**/Makefile
+
+# Go test files — not needed in production image
+**/*_test.go
+
+# Docs
+**/*.md
+
+# OS / IDE
+**/.DS_Store
+**/.idea/
+**/.vscode/

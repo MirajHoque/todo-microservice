@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 )
 
 // PageHandler serves HTML pages using Go templates.

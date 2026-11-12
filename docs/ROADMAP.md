@@ -50,6 +50,11 @@ Routing (via Gateway API): `/` → web, `/api/auth` → auth, `/api/todos` → t
   - [x] 2h. Dockerfile (uv, no dev deps, non-root, healthcheck); docs
   - [x] 2i. Guardrails — 2i.1 deleting needs the user's Confirm click (human-in-the-loop); 2i.2 per-user rate limit + daily cost cap; 2i.3 prompt-injection hardening, stay on topic, per-agent token caps
 - [ ] **3. Split `services/api` into `services/auth` + `services/todo`** — database per service, shared code to `libs/go/`
+  - [x] 3a. Shared Go code to `libs/go/` (own module): `logger`, `middleware`, `jwtauth` (JWT *checking* only — creating tokens stays with auth). The api imports it through a `replace` line in `go.mod`; its Docker image is now built from the repo root. First Go tests.
+  - [ ] 3b. `services/auth` (port 8081, `auth_db`): register, login, logout; `proxy.ts` sends `/api/v1/auth` there
+  - [ ] 3c. `services/todo` (port 8082, `todo_db`): todo CRUD, no foreign key to users (user id comes from the JWT); web and the agent point at it
+  - [ ] 3d. Move the existing users and todos to the new databases; delete `services/api` and the old Go HTML pages
+  - [ ] 3e. Docs; Go 401 responses get a `request_id`
 - [ ] **3½. Compose for the whole system** — bring `compose.yaml` back (it is parked until now) so every service plus Postgres starts with one command. Until this step each service runs natively in its own terminal (see `docs/LOCAL_DEV.md`).
 - [ ] **4. Local Kubernetes** (kind or k3d) with Kustomize manifests
 - [ ] **5. AKS** — ACR, AKS, Azure Postgres, Gateway API + cert-manager, Key Vault for secrets

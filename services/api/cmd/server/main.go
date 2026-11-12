@@ -13,12 +13,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	// Shared code (libs/go): the same packages every Go service will use.
+	"github.com/MirajHoque/todo-microservice/libs/go/jwtauth"
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
+	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
+
 	"github.com/MirajHoque/todo-microservice/services/api/internal/auth"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/config"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/handlers"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
 	"github.com/MirajHoque/todo-microservice/services/api/migrations"
 	"github.com/MirajHoque/todo-microservice/services/api/web"
 	// <pathOftheModule>/<packageWantToImport>
@@ -42,7 +45,7 @@ func main() {
 	}
 
 	// ── 2. Logger ──────────────────────────────────────────────────────────
-	log := logger.New(cfg.LogFormat, cfg.LogLevel, cfg.Env)
+	log := logger.New("todo-app", cfg.LogFormat, cfg.LogLevel, cfg.Env)
 	log.Info("starting todo-app",
 		slog.String("version", version),
 		slog.String("env", cfg.Env),
@@ -70,7 +73,10 @@ func main() {
 	}
 
 	// ── 5. Services & repositories ─────────────────────────────────────────
+	// Two halves of JWT: jwtService CREATES tokens (login/register — auth
+	// only), jwtVerifier CHECKS them (shared library, every service).
 	jwtService := auth.NewService(cfg.JWTSecret, cfg.JWTExpiry)
+	jwtVerifier := jwtauth.NewVerifier(cfg.JWTSecret)
 	userRepo := db.NewUserRepository(database)
 	todoRepo := db.NewTodoRepository(database)
 
@@ -108,7 +114,7 @@ func main() {
 
 		// Protected
 		r.Group(func(r chi.Router) {
-			r.Use(jwtService.Middleware)
+			r.Use(jwtVerifier.Middleware)
 
 			// Auth
 			r.Post("/auth/logout", authHandler.Logout)

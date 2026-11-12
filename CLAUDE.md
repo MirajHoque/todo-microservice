@@ -20,6 +20,9 @@ and the current step. Tick off steps there as they are completed.
 ## Layout
 
 - `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
+- `libs/go/` — Go code shared by the Go services (own module): `logger`, `middleware`, `jwtauth`.
+  Generic only (ROADMAP rule 4). Services use it via a `replace ../../libs/go` line in `go.mod`;
+  check with `cd libs/go && make check && make test`
 - `services/agent/` — Python/FastAPI agent service (port 8083): orchestrator + todo + planner agents;
   `uv` + `make dev`/`make test`/`make lint`. Errors and log fields match the Go api.
 - `web/` — Next.js frontend (port 3000); `web/proxy.ts` forwards `/api/v1/agent/...` to
@@ -30,7 +33,9 @@ and the current step. Tick off steps there as they are completed.
 
 ## Commands
 
-- Build/vet the api: `cd services/api && go build ./... && go vet ./...`
+- Build/vet/test the api: `cd services/api && go build ./... && go vet ./... && go test ./...`
+- Go Docker images are built from the repo root (they need `libs/go`):
+  `docker build -f services/api/Dockerfile -t todo-app .`
 - Run locally: `make db` (Postgres via plain `docker run`), then
   `cd services/api && make dev` (needs `services/api/.env`, copied from `.env.example`).
   The owner runs each service natively, one terminal each, to learn how

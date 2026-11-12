@@ -1,5 +1,10 @@
 // Package logger sets up structured JSON logging using Go's built-in log/slog.
 //
+// SHARED CODE (libs/go): every Go service imports this package, so all
+// services log the same field names and Loki can follow one request
+// across them. It knows nothing about users or todos (ROADMAP rule 4).
+// The Python agent uses the same field names (services/agent/.../log.py).
+//
 // WHY slog?
 //   - Built into Go 1.21+ — no external dependency
 //   - Structured key-value pairs → Loki can index them as labels
@@ -10,7 +15,7 @@
 //   - time        (RFC3339Nano)
 //   - level       (INFO, WARN, ERROR, DEBUG)
 //   - msg         (human-readable summary)
-//   - service     (always "todo-app")
+//   - service     (the service's name, e.g. "auth" — given to New)
 //   - env         (development | production)
 //   - request_id  (added by middleware per-request)
 //   - user_id     (added by auth middleware when logged in)
@@ -48,10 +53,12 @@ const (
 
 // New creates a structured slog.Logger.
 //
+//   - service is stamped on every line ("todo-app", later "auth", "todo"),
+//     so you can tell in Loki which service wrote it
 //   - format "json"  → JSONHandler  (use in production, Alloy ingests this)
 //   - format "text"  → TextHandler  (use in development, human-readable)
 //   - level controls minimum log level; below this level is silently dropped
-func New(format, level, env string) *slog.Logger {
+func New(service, format, level, env string) *slog.Logger {
 	var lvl slog.Level
 	switch level {
 	case "debug":
@@ -81,7 +88,7 @@ func New(format, level, env string) *slog.Logger {
 	// Stamp every log line with service name and environment.
 	// These become Loki labels — keep them low-cardinality.
 	logger := slog.New(handler).With(
-		slog.String(FieldService, "todo-app"),
+		slog.String(FieldService, service),
 		slog.String(FieldEnv, env),
 	)
 

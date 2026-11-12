@@ -23,7 +23,7 @@ Two things keep it safe and cheap:
   "wrap-up" call with tools switched off, so the user hears what was
   really done instead of a bare "too many steps".
 
-- A tool never raises: whatever goes wrong (bad arguments, the api
+- A tool never raises: whatever goes wrong (bad arguments, the todo service
   says no, a sub-agent's model is down, a bug) becomes a result
   starting with "error:". The model reads it and can explain or retry,
   and every tool call in the history always has its result (models
@@ -106,7 +106,7 @@ class Run:
 
     llm: OpenRouter
     settings: Settings
-    todos: TodoClient  # the api's todo endpoints …
+    todos: TodoClient  # the todo service's todo endpoints …
     caller: Caller  # … called as this user, with their JWT
     budget: Budget
     # Deletions the todo agent PROPOSED ([{"id", "title"}]). Nothing is
@@ -273,7 +273,7 @@ class Agent:
             if not isinstance(args, dict):
                 raise ValueError("arguments must be a JSON object")
             output = await tool.fn(run, args)
-        except TodoAPIError as exc:  # the api said no (404, 400, …) — its own message
+        except TodoAPIError as exc:  # the todo service said no (404, 400, …) — its own message
             output = f"error: {exc.message}"
         except (KeyError, TypeError, ValueError) as exc:  # bad JSON, missing/odd arguments
             output = f"error: invalid arguments for {name}: {exc}"

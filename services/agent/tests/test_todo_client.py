@@ -1,12 +1,12 @@
 """TodoClient tests.
 
 Part 1 uses a FAKE api (httpx2.MockTransport): a Python function that
-plays the api, so we can check exactly what the client sends and how
+plays the todo service, so we can check exactly what the client sends and how
 it handles every answer — no network, nothing running.
 
 Part 2 talks to the REAL Go services (skipped if they aren't running):
 a user registers at the auth service, then the agent's client uses
-that user's token at the api — three services, actually talking.
+that user's token at the todo service — three services, actually talking.
 """
 
 import asyncio
@@ -120,9 +120,9 @@ def test_api_too_slow_is_504():
     assert err.value.status == 504
 
 
-# ── Part 2: against the real Go api ──────────────────────────
+# ── Part 2: against the real Go services ─────────────────────
 
-API_URL = "http://localhost:8080"  # todos
+TODO_URL = "http://localhost:8082"  # todos
 AUTH_URL = "http://localhost:8081"  # register / login (its own service since step 3b)
 
 
@@ -130,19 +130,19 @@ AUTH_URL = "http://localhost:8081"  # register / login (its own service since st
 def real_caller() -> Caller:
     """Register a fresh user at the real auth service; skip if a service isn't running."""
     try:
-        httpx2.get(f"{API_URL}/health", timeout=5)
+        httpx2.get(f"{TODO_URL}/health", timeout=5)
         body = _register()
     except httpx2.HTTPError:
-        pytest.skip("needs the Go api AND the auth service: `make dev` in services/api and auth")
+        pytest.skip("needs the todo AND auth services (`make dev` in each)")
     return Caller(user_id=body["user"]["id"], token=body["token"])
 
 
 def test_full_round_trip_with_the_real_api(real_caller):
     async def scenario():
         async with httpx2.AsyncClient(timeout=10) as http:
-            todos = TodoClient(http, API_URL)
+            todos = TodoClient(http, TODO_URL)
             created = await todos.create_todo(real_caller, "Written by the agent", priority="high")
-            assert created["user_id"] == real_caller.user_id  # the api says: it's the user's
+            assert created["user_id"] == real_caller.user_id  # the service says: it's the user's
 
             listed = await todos.list_todos(real_caller)
             assert [t["id"] for t in listed] == [created["id"]]
@@ -162,13 +162,13 @@ def test_full_round_trip_with_the_real_api(real_caller):
 
 def test_cannot_touch_another_users_todos(real_caller):
     # A second user's token can't see or change the first user's todo:
-    # the api enforces it — the agent needs no extra code for this.
+    # the todo service enforces it — the agent needs no extra code for this.
     other_user = _register()
     other = Caller(user_id=other_user["user"]["id"], token=other_user["token"])
 
     async def scenario():
         async with httpx2.AsyncClient(timeout=10) as http:
-            todos = TodoClient(http, API_URL)
+            todos = TodoClient(http, TODO_URL)
             mine = await todos.create_todo(real_caller, "private")
             assert await todos.list_todos(other) == []
             with pytest.raises(TodoAPIError) as err:

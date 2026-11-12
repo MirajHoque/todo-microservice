@@ -1,10 +1,17 @@
 // todo_repository.go — all SQL for the todos table.
 //
-// Same pattern as user_repository.go:
+// REPOSITORY PATTERN
+// A repository is a Go struct that owns all database queries for one
+// table. Handlers call its methods instead of writing SQL themselves:
 //   - One struct that owns all queries for this table
 //   - Each method does one thing
 //   - SQL errors are converted to sentinel errors where needed
-//   - Structured logging on every operation for Loki/Grafana
+//
+// The `todos` table has exactly ONE owner: this service (ROADMAP rule
+// 3). The agent changes todos through this service's HTTP API.
+//
+// The connection pool comes from the shared library (libs/go/postgres);
+// the SQL stays here, because it knows about todos.
 package db
 
 import (
@@ -12,18 +19,28 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/MirajHoque/todo-microservice/libs/go/postgres"
+	"github.com/MirajHoque/todo-microservice/services/todo/internal/models"
 )
 
 // TodoRepository handles all database operations for the todos table.
 type TodoRepository struct {
-	db *DB
+	db *postgres.DB
 }
 
 // NewTodoRepository creates a TodoRepository.
-func NewTodoRepository(db *DB) *TodoRepository {
+func NewTodoRepository(db *postgres.DB) *TodoRepository {
 	return &TodoRepository{db: db}
+}
+
+// isUUID reports whether id looks like a todo id. An id that isn't a
+// UUID can't belong to any todo — callers answer "not found" instead
+// of sending it to Postgres, which would fail with a type error (a 500).
+func isUUID(id string) bool {
+	return uuid.Validate(id) == nil
 }
 
 // Create inserts a new todo for the given user.
@@ -110,6 +127,9 @@ func (r *TodoRepository) ListByUser(ctx context.Context, userID string) ([]*mode
 // Also checks user_id — a user cannot fetch another user's todo.
 // Returns ErrTodoNotFound if the todo doesn't exist OR belongs to someone else.
 func (r *TodoRepository) GetByID(ctx context.Context, id, userID string) (*models.Todo, error) {
+	if !isUUID(id) {
+		return nil, ErrTodoNotFound
+	}
 	todo := &models.Todo{}
 
 	err := r.db.Pool.QueryRow(ctx, `
@@ -167,9 +187,11 @@ func (r *TodoRepository) Update(ctx context.Context, id, userID string, req *mod
 		}
 	}
 
-	// Validate the updated todo
+	// Validate the updated todo. A broken rule (empty title, unknown
+	// priority) is the CALLER's mistake: wrap it in ErrInvalidTodo so
+	// the handler can answer 400 instead of 500.
 	if err := todo.Validate(); err != nil {
-		return nil, fmt.Errorf("todo repo: update validate: %w", err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidTodo, err)
 	}
 
 	err = r.db.Pool.QueryRow(ctx, `
@@ -207,6 +229,9 @@ func (r *TodoRepository) Update(ctx context.Context, id, userID string, req *mod
 // Checks user_id — a user cannot delete another user's todo.
 // Returns ErrTodoNotFound if the todo doesn't exist or belongs to someone else.
 func (r *TodoRepository) Delete(ctx context.Context, id, userID string) error {
+	if !isUUID(id) {
+		return ErrTodoNotFound
+	}
 	result, err := r.db.Pool.Exec(ctx, `
 		DELETE FROM todos
 		WHERE id = $1 AND user_id = $2
@@ -229,3 +254,7 @@ func (r *TodoRepository) Delete(ctx context.Context, id, userID string) error {
 // ErrTodoNotFound is returned when a todo lookup finds no matching row
 // or when the todo belongs to a different user.
 var ErrTodoNotFound = errors.New("todo not found")
+
+// ErrInvalidTodo is returned when an update would break a rule of a
+// todo (see models.Todo.Validate). The wrapped error says which rule.
+var ErrInvalidTodo = errors.New("invalid todo")

@@ -2,6 +2,6 @@
 
 loop.py          the agent loop every agent runs (+ Budget, Tool, Agent)
 orchestrator.py  the agent the user talks to; delegates to the others
-todo.py          the only agent that changes todos (via the api)
+todo.py          the only agent that changes todos (via the todo service)
 planner.py       turns a goal into steps; can read the list, not change it
 """

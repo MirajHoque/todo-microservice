@@ -14,7 +14,7 @@
 #     --env-file services/agent/.env \
 #     -e ENV=production \
 #     -e DATABASE_URL=postgresql://agent:agent@host.docker.internal:5433/agent_db \
-#     -e API_URL=http://host.docker.internal:8080 \
+#     -e TODO_URL=http://host.docker.internal:8082 \
 #     todo-agent
 #
 # (--env-file brings JWT_SECRET, OPENROUTER_API_KEY, …. The -e flags

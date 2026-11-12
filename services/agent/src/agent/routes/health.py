@@ -7,7 +7,7 @@ GET /health/ready  readiness: "can I serve requests right now?" Runs a
                    real query on the database. 503 while it can't, so
                    traffic is sent elsewhere until it recovers.
 
-Same response shapes as the Go api's /health and /health/ready.
+Same response shapes as the Go services' /health and /health/ready.
 """
 
 from datetime import UTC, datetime

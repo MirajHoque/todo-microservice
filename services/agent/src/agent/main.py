@@ -1,11 +1,11 @@
 """main.py — builds the FastAPI app.
 
-Like the router setup in services/api/cmd/server/main.go:
+Like the router setup in services/todo/internal/handlers/routes.go:
 config → logging → (on start: database) → middleware → routes.
 
 `lifespan` runs code once when the server starts (before the first
 request) and once when it stops: open the database pool, the
-HTTP client used to call the api and the LLM client, then close
+HTTP client used to call the todo service and the LLM client, then close
 them cleanly on shutdown (Ctrl+C / SIGTERM).
 
 Every request goes through `request_context` (middleware):
@@ -16,7 +16,7 @@ Every request goes through `request_context` (middleware):
 Reusing the caller's X-Request-ID is what lets one ID follow a
 request from web → agent → api in the logs.
 
-Errors use the same JSON shape as the Go api,
+Errors use the same JSON shape as the Go services,
 {"error": "...", "request_id": "..."}, instead of FastAPI's default
 {"detail": ...} — web/lib/api.ts reads "error" from every service.
 """
@@ -52,9 +52,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.pool = await open_pool(settings)
     await migrate(app.state.pool)  # create/update tables before serving
     # One shared HTTP client for the whole service: it keeps connections
-    # to the api open and reuses them (like a database pool, for HTTP).
+    # to the todo service open and reuses them (like a database pool, for HTTP).
     app.state.http = httpx2.AsyncClient(timeout=settings.api_timeout_seconds)
-    app.state.todos = TodoClient(app.state.http, settings.api_url)
+    app.state.todos = TodoClient(app.state.http, settings.todo_url)
     # The LLM client (OpenRouter SDK) gets its own httpx client — the SDK
     # is built on httpx; our api calls use httpx2.
     app.state.llm_http = httpx.AsyncClient()

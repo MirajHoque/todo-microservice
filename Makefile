@@ -9,10 +9,12 @@
 #   make db                      → start Postgres (plain docker run)
 #                                  + create each service's user/database
 #   make svc SERVICE=api CMD=dev → run one service natively
-#   make psql                    → psql shell in the api's database (todo)
 #   make psql-auth               → psql shell in the auth service's database (auth_db)
+#   make psql-todo               → psql shell in the todo service's database (todo_db)
 #   make psql-agent              → psql shell in the agent's database (agent_db)
-#   make db-copy-users           → one-time: copy users from the api's database to auth_db
+#   make psql                    → psql shell as the admin, in the old monolith database (todo)
+#   make db-copy-users           → one-time: copy users from the old database to auth_db
+#   make db-copy-todos           → one-time: copy todos from the old database to todo_db
 #   make db-stop                 → stop Postgres (data is kept)
 #   make db-reset                → delete Postgres and all its data
 #
@@ -20,7 +22,7 @@
 #   make up / make down / make logs → whole system via compose
 # ============================================================
 
-SERVICE ?= api
+SERVICE ?= todo
 CMD     ?= build
 
 # ── Local Postgres settings ──────────────────────────────────
@@ -35,7 +37,7 @@ DB_USER      := todo
 DB_PASSWORD  := todo
 DB_NAME      := todo
 
-.PHONY: db db-init db-copy-users db-stop db-reset psql psql-auth psql-agent up down logs svc help
+.PHONY: db db-init db-copy-users db-copy-todos db-stop db-reset psql psql-auth psql-todo psql-agent up down logs svc help
 
 ## db: start Postgres in Docker (creates it the first time) and wait until ready
 #  First run: `docker run` downloads the image (if needed) and creates the
@@ -61,10 +63,10 @@ db:
 ## db-init: create each service's user + database (safe to re-run; see db/init.sql)
 db-init:
 	@docker exec -i $(DB_CONTAINER) psql -q -v ON_ERROR_STOP=1 -U $(DB_USER) -d postgres < db/init.sql
-	@echo "✓ Databases ready: todo (user todo), auth_db + auth_db_test (user auth), agent_db + agent_db_test (user agent)"
+	@echo "✓ Databases ready: auth_db (user auth), todo_db (user todo_svc), agent_db (user agent) — each with a _test twin"
 
-## db-copy-users: one-time (step 3b): copy the users from the api's database (todo) to auth_db
-#  Users used to live in the api's database; now the auth service owns
+## db-copy-users: one-time (step 3b): copy the users from the old monolith database (todo) to auth_db
+#  Users used to live in the monolith's database; now the auth service owns
 #  them. This copies every account (same id, same password hash), so
 #  people can still log in and their todos still belong to them.
 #
@@ -84,7 +86,7 @@ db-copy-users:
 		-c "COPY incoming ($(USER_COLUMNS)) FROM STDIN" \
 		-c "INSERT INTO users ($(USER_COLUMNS)) SELECT $(USER_COLUMNS) FROM incoming ON CONFLICT DO NOTHING"
 	@echo "✓ Users in auth_db: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d auth_db -c 'SELECT count(*) FROM users')" \
-		"(api's database: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d $(DB_NAME) -c 'SELECT count(*) FROM users'))"
+		"(old database: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d $(DB_NAME) -c 'SELECT count(*) FROM users'))"
 
 ## db-stop: stop Postgres (data stays in the volume)
 db-stop:
@@ -95,9 +97,30 @@ db-reset:
 	-docker rm -f $(DB_CONTAINER)
 	-docker volume rm $(DB_VOLUME)
 
-## psql: open a psql shell in the api's database (todo)
+## db-copy-todos: one-time (step 3c): copy the todos from the old monolith database (todo) to todo_db
+#  Same idea as db-copy-users: print the rows as text from one database,
+#  pipe them into the other. Ids are kept, so every todo still belongs
+#  to the same user and the agent's memory still points at the right todos.
+#  Safe to run again: todos that are already there are skipped.
+#  Start the todo service once before this — it creates the todos table.
+TODO_COLUMNS := id, user_id, title, description, priority, done, done_at, created_at, updated_at
+db-copy-todos:
+	@docker exec $(DB_CONTAINER) psql -q -v ON_ERROR_STOP=1 -U $(DB_USER) -d $(DB_NAME) \
+		-c "COPY (SELECT $(TODO_COLUMNS) FROM todos) TO STDOUT" \
+	| docker exec -i $(DB_CONTAINER) psql -q -v ON_ERROR_STOP=1 -U $(DB_USER) -d todo_db \
+		-c "CREATE TEMP TABLE incoming (LIKE todos)" \
+		-c "COPY incoming ($(TODO_COLUMNS)) FROM STDIN" \
+		-c "INSERT INTO todos ($(TODO_COLUMNS)) SELECT $(TODO_COLUMNS) FROM incoming ON CONFLICT DO NOTHING"
+	@echo "✓ Todos in todo_db: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d todo_db -c 'SELECT count(*) FROM todos')" \
+		"(old database: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d $(DB_NAME) -c 'SELECT count(*) FROM todos'))"
+
+## psql: open a psql shell as the admin user, in the old monolith database (todo)
 psql:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME)
+
+## psql-todo: open a psql shell in the todo service's database, as its user
+psql-todo:
+	docker exec -it $(DB_CONTAINER) psql -U todo_svc -d todo_db
 
 ## psql-auth: open a psql shell in the auth service's database, as the auth user
 psql-auth:

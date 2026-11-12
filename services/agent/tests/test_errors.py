@@ -1,4 +1,4 @@
-"""Errors must look like the Go api's: {"error": "...", "request_id": "..."}.
+"""Errors must look like the Go services': {"error": "...", "request_id": "..."}.
 
 web/lib/api.ts reads the "error" field from every service, so this
 shape is part of the contract between services.

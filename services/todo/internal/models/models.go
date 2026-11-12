@@ -19,8 +19,8 @@ import (
 	"time"
 )
 
-// (The User type moved to services/auth in step 3b — this service
-// only knows a user as the `user_id` string inside the JWT.)
+// (There is no User type here: users belong to services/auth. This
+// service only knows a user as the `user_id` string inside the JWT.)
 
 // ---- Todo -------------------------------------------------------------------
 
@@ -53,24 +53,29 @@ type Todo struct {
 }
 
 // Validate checks that a Todo is internally consistent.
+// The messages are sent to the client as they are (400 Bad Request).
 func (t *Todo) Validate() error {
 	t.Title = strings.TrimSpace(t.Title)
 	if t.Title == "" {
-		return fmt.Errorf("todo: title is required")
+		return fmt.Errorf("title is required")
 	}
 	if len(t.Title) > 255 {
-		return fmt.Errorf("todo: title must be 255 characters or fewer")
+		return fmt.Errorf("title must be 255 characters or fewer")
 	}
 	if t.Priority == "" {
 		t.Priority = PriorityMedium
 	}
-	switch t.Priority {
+	return t.Priority.Validate()
+}
+
+// Validate checks that p is one of the three known priorities.
+func (p Priority) Validate() error {
+	switch p {
 	case PriorityLow, PriorityMedium, PriorityHigh:
-		// valid
+		return nil
 	default:
-		return fmt.Errorf("todo: invalid priority %q, must be low, medium, or high", t.Priority)
+		return fmt.Errorf("invalid priority %q, must be low, medium, or high", string(p))
 	}
-	return nil
 }
 
 // Complete marks a todo as done and records the timestamp.
@@ -99,6 +104,10 @@ func (r *CreateTodoRequest) Validate() error {
 	}
 	if len(r.Title) > 255 {
 		return fmt.Errorf("title must be 255 characters or fewer")
+	}
+	// Empty is fine: the repository fills in "medium".
+	if r.Priority != "" {
+		return r.Priority.Validate()
 	}
 	return nil
 }

@@ -1,6 +1,6 @@
 """log.py — structured JSON logs, one line per event.
 
-Field names match the Go api (libs/go/logger):
+Field names match the Go services (libs/go/logger):
 service, env, request_id, user_id, method, path, status,
 duration_ms, error, agent, action. Same names in every service
 means one log query (Loki/Grafana, step 6) can follow a request

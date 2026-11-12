@@ -1,14 +1,14 @@
 # ============================================================
-# Makefile for the api service (temporary monolith)
+# Makefile for the todo service (port 8082)
 # Usage: make <target>
 # ============================================================
 
-APP_NAME   := todo-app
+APP_NAME   := todo
 CMD_PATH   := ./cmd/server
 BIN_DIR    := ./bin
 BIN        := $(BIN_DIR)/$(APP_NAME)
 
-.PHONY: all build run dev tidy lint test clean help
+.PHONY: all build run dev tidy lint test docker clean help
 
 ## all: build the binary (default target)
 all: build
@@ -39,9 +39,14 @@ tidy:
 lint:
 	golangci-lint run ./...
 
-## test: run all tests with race detector
+## test: run all tests with race detector (needs `make db` — uses todo_db_test)
+#  -p 1: test packages run one after another, because they share one test database
 test:
-	go test -race -v ./...
+	go test -race -p 1 ./...
+
+## docker: build the image — from the repo root, because it needs libs/go
+docker:
+	docker build -f Dockerfile -t todo-todo ../..
 
 ## clean: remove build artifacts
 clean:

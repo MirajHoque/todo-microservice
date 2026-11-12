@@ -52,7 +52,7 @@ async def confirm(
         deleted, failed = [], []
         for todo in planned:
             try:
-                await todos.delete_todo(caller, todo["id"])  # through the api, as the user
+                await todos.delete_todo(caller, todo["id"])  # through the todo service, as the user
                 deleted.append(todo)
             except TodoAPIError as exc:
                 if exc.status == 404:  # already gone (deleted in the list meanwhile): fine

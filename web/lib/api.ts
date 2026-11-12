@@ -3,8 +3,8 @@
 //
 // Pages call these instead of using fetch() directly, so the
 // details live in one place:
-//   - the base path /api/v1 (proxy.ts forwards /api/v1/agent/...
-//     to the Python agent, everything else to the Go api)
+//   - the base path /api/v1 (proxy.ts forwards each path to the
+//     service that owns it: auth, todo or the agent)
 //   - JSON encoding/decoding
 //   - attaching the JWT ("Authorization: Bearer <token>")
 //   - turning error responses into an ApiError
@@ -28,7 +28,7 @@ import type {
 } from "./types";
 
 // Relative URL: the browser sends it to web (localhost:3000), and
-// web forwards it to the api. The browser never needs the api's address.
+// web forwards it to the right service. The browser never needs their addresses.
 const BASE = "/api/v1";
 
 // ApiError is thrown for every non-2xx response.
@@ -69,7 +69,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       ? "agent"
       : path.startsWith("/auth")
         ? "auth service"
-        : "api";
+        : "todo service";
     const message =
       err?.error ??
       (res.status >= 500 ? `Cannot reach the ${service}. Is it running?` : res.statusText);

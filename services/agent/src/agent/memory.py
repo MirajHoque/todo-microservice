@@ -1,7 +1,7 @@
 """memory.py — a user's conversation in agent_db.
 
 All SQL for the conversations/messages tables lives here (like the
-repository files in services/api/internal/db/). Every function takes
+repository files in services/todo/internal/db/). Every function takes
 the user_id from the verified JWT, so a user can only ever reach
 their own conversation.
 

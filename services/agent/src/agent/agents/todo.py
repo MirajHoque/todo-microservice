@@ -9,8 +9,8 @@ Every task starts from an empty conversation: the task text must say
 everything (the orchestrator's prompt tells it so). The conversation
 memory lives with the orchestrator.
 
-The tools don't touch a database: they call the api as the user
-(todo_client.py). The model decides WHAT to do; the api decides
+The tools don't touch a database: they call the todo service as the user
+(todo_client.py). The model decides WHAT to do; the todo service decides
 what's ALLOWED.
 
 Guardrail (step 2i.1): delete_todo does NOT delete. It only proposes;

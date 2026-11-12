@@ -72,7 +72,7 @@ export default function TodosPage() {
   const loadTodos = useCallback(() => {
     listTodos()
       .then(setTodos)
-      .catch((err) => handleError(err, "Could not load todos. Is the api running?"));
+      .catch((err) => handleError(err, "Could not load todos. Is the todo service running?"));
   }, [handleError]);
 
   // On page open: load the list (or go to /login).
@@ -137,7 +137,7 @@ export default function TodosPage() {
     // Two services to tell, while the token still works:
     //   - the agent forgets this user's chat (its memory in agent_db),
     //     so the next login starts a fresh conversation
-    //   - the api logs the logout
+    //   - the auth service logs the logout
     // Both run at the same time; allSettled waits for both and never
     // throws — we log out locally even if a service is down.
     await Promise.allSettled([clearConversation(), logout()]);

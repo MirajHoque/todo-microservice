@@ -16,12 +16,15 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
-	"github.com/go-chi/chi/v5"
+	"github.com/MirajHoque/todo-microservice/libs/go/respond"
+	"github.com/MirajHoque/todo-microservice/services/todo/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/todo/internal/models"
 )
 
 // TodoHandler holds dependencies for todo endpoints.
@@ -47,13 +50,13 @@ func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Decode request body
 	var req models.CreateTodoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid request body")
+		respond.Error(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	// Validate
 	if err := req.Validate(); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -65,7 +68,7 @@ func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldAction, "todo_create_fail"),
 			slog.String(logger.FieldUserID, userID),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -75,7 +78,7 @@ func (h *TodoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		slog.String("priority", string(todo.Priority)),
 	)
 
-	writeJSON(w, http.StatusCreated, todo)
+	respond.JSON(w, http.StatusCreated, todo)
 }
 
 // ── List ──────────────────────────────────────────────────────────────────────
@@ -94,7 +97,7 @@ func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldError, err.Error()),
 			slog.String(logger.FieldAction, "todo_list_fail"),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -103,7 +106,7 @@ func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
 		slog.Int("count", len(todos)),
 	)
 
-	writeJSON(w, http.StatusOK, todos)
+	respond.JSON(w, http.StatusOK, todos)
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -120,14 +123,14 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// chi.URLParam reads the :id from the route path
 	todoID := chi.URLParam(r, "id")
 	if todoID == "" {
-		writeError(w, r, http.StatusBadRequest, "todo id is required")
+		respond.Error(w, r, http.StatusBadRequest, "todo id is required")
 		return
 	}
 
 	// Decode partial update request
 	var req models.UpdateTodoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid request body")
+		respond.Error(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -135,7 +138,14 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 	todo, err := h.todos.Update(r.Context(), todoID, userID, &req)
 	if err != nil {
 		if errors.Is(err, db.ErrTodoNotFound) {
-			writeError(w, r, http.StatusNotFound, "todo not found")
+			respond.Error(w, r, http.StatusNotFound, "todo not found")
+			return
+		}
+		// The change would break a rule (empty title, unknown priority):
+		// the caller's mistake → 400 with the rule, not a 500.
+		if errors.Is(err, db.ErrInvalidTodo) {
+			rule := strings.TrimPrefix(err.Error(), db.ErrInvalidTodo.Error()+": ")
+			respond.Error(w, r, http.StatusBadRequest, rule)
 			return
 		}
 		log.Error("failed to update todo",
@@ -143,7 +153,7 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldAction, "todo_update_fail"),
 			slog.String("todo_id", todoID),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -153,7 +163,7 @@ func (h *TodoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		slog.Bool("done", todo.Done),
 	)
 
-	writeJSON(w, http.StatusOK, todo)
+	respond.JSON(w, http.StatusOK, todo)
 }
 
 // ── Delete ────────────────────────────────────────────────────────────────────
@@ -168,13 +178,13 @@ func (h *TodoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	todoID := chi.URLParam(r, "id")
 
 	if todoID == "" {
-		writeError(w, r, http.StatusBadRequest, "todo id is required")
+		respond.Error(w, r, http.StatusBadRequest, "todo id is required")
 		return
 	}
 
 	if err := h.todos.Delete(r.Context(), todoID, userID); err != nil {
 		if errors.Is(err, db.ErrTodoNotFound) {
-			writeError(w, r, http.StatusNotFound, "todo not found")
+			respond.Error(w, r, http.StatusNotFound, "todo not found")
 			return
 		}
 		log.Error("failed to delete todo",
@@ -182,7 +192,7 @@ func (h *TodoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldAction, "todo_delete_fail"),
 			slog.String("todo_id", todoID),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 

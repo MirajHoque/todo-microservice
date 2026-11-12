@@ -1,13 +1,13 @@
 """todo_client.py — the agent's way to read and change todos.
 
-The `todos` table belongs to the api service (ROADMAP rule 3). The
+The `todos` table belongs to the todo service (ROADMAP rule 3). The
 agent can't even connect to that database, so every todo action is
-an HTTP call to the api — the same endpoints web uses:
+an HTTP call to the todo service — the same endpoints web uses:
 
-    list    GET    {API_URL}/api/v1/todos
-    create  POST   {API_URL}/api/v1/todos
-    update  PATCH  {API_URL}/api/v1/todos/{id}
-    delete  DELETE {API_URL}/api/v1/todos/{id}
+    list    GET    {TODO_URL}/api/v1/todos
+    create  POST   {TODO_URL}/api/v1/todos
+    update  PATCH  {TODO_URL}/api/v1/todos/{id}
+    delete  DELETE {TODO_URL}/api/v1/todos/{id}
 
 Every call carries two headers from the incoming request:
   Authorization: Bearer <the user's own JWT>
@@ -36,7 +36,7 @@ log = get_logger(__name__)
 class TodoAPIError(Exception):
     """The api said no (4xx/5xx) or couldn't be reached.
 
-    `message` is the api's own "error" text ("todo not found", …) —
+    `message` is the todo service's own "error" text ("todo not found", …) —
     useful to hand back to the LLM so it can explain what went wrong.
     """
 

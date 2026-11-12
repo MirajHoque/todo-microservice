@@ -6,7 +6,7 @@ network is replaced (MockTransport):
   FakeModel   answers from one script PER AGENT, in OpenRouter's chat
               format. It knows which agent is calling from the system
               prompt, and records every request
-  FakeTodoAPI keeps todos in a dict, like the Go api would
+  FakeTodoAPI keeps todos in a dict, like the todo service would
 
 The `chat` fixture (conftest.py) swaps both into the app.
 """
@@ -116,7 +116,7 @@ class FakeModel:
 
 
 class FakeTodoAPI:
-    """Plays the Go api's /api/v1/todos endpoints, in memory."""
+    """Plays the todo service's /api/v1/todos endpoints, in memory."""
 
     def __init__(self) -> None:
         self.todos: dict[str, dict] = {}

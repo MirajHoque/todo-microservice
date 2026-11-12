@@ -1,7 +1,7 @@
 # auth — accounts and tokens
 
 The auth service of the todo system (see `docs/ROADMAP.md`). Split out
-of the Go api in step 3b.
+of the Go monolith in step 3b.
 
 - Language: Go · Port: **8081** · Database: **`auth_db`** (user `auth`)
 - Owns: the `users` table — nobody else can read it
@@ -27,12 +27,12 @@ They never ask this service. They only check the token:
 ```
 1. browser ── email + password ──▶ auth ── checks the password hash in auth_db
 2. browser ◀── token (JWT) ─────── auth    signs {"user_id": "…", "exp": …} with JWT_SECRET
-3. browser ── token ──▶ api / agent        check the signature with the SAME JWT_SECRET
+3. browser ── token ──▶ todo / agent       check the signature with the SAME JWT_SECRET
                                            and read user_id — no call to auth, no users table
 ```
 
 That is why `JWT_SECRET` must be identical in `services/auth/.env`,
-`services/api/.env` and `services/agent/.env`. If one differs, that
+`services/todo/.env` and `services/agent/.env`. If one differs, that
 service answers `401 token is invalid` for every request.
 
 Trade-off to know about: because nobody asks auth, a token stays valid
@@ -55,7 +55,7 @@ One-time setup:
 ```bash
 make db                                   # in the repo root: creates auth_db + user auth
 cd services/auth
-cp .env.example .env                      # then set JWT_SECRET to the SAME value as services/api/.env
+cp .env.example .env                      # then set JWT_SECRET to the SAME value as services/todo/.env
 ```
 
 Every day:
@@ -75,7 +75,7 @@ The `users` table is created by this service's own migration
 (`migrations/001_create_users.sql`, embedded in the binary) when it
 starts.
 
-Coming from before step 3b? Your accounts were in the api's database.
+Coming from before step 3b? Your accounts were in the monolith's database.
 Copy them once (safe to repeat), after starting this service one time:
 
 ```bash

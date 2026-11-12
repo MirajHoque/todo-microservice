@@ -52,4 +52,4 @@ async def get_conversation(caller: CurrentUser, pool: Pool) -> ConversationRespo
 async def delete_conversation(caller: CurrentUser, pool: Pool) -> Response:
     deleted = await memory.clear(pool, caller.user_id)
     log.info("conversation cleared", extra={"action": "memory_clear", "deleted": deleted})
-    return Response(status_code=204)  # 204 No Content — like DELETE in the api
+    return Response(status_code=204)  # 204 No Content — like DELETE in the todo service

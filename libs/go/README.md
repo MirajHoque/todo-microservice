@@ -51,7 +51,7 @@ Because of `../../libs/go`, a service's Docker image must be built from
 the **repo root**, so the build can see both folders:
 
 ```bash
-docker build -f services/api/Dockerfile -t todo-app .
+docker build -f services/todo/Dockerfile -t todo-todo .
 ```
 
 ## Commands

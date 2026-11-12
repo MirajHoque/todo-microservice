@@ -1,3 +1,21 @@
+// main.go — starts the todo service (port 8082).
+//
+// The todo service owns the todos (database todo_db). It has no users
+// and no login: it only CHECKS the token that the auth service created,
+// and takes the user's id from it.
+//
+//	browser ── token ──▶ web ──▶ todo ──▶ todo_db
+//	agent   ── the user's token ──▶ todo          (same API, same rules)
+//
+// What main does, in order: read config → logger → connect to the
+// database → run migrations → build the handlers → start the HTTP
+// server → wait for Ctrl+C and shut down cleanly.
+//
+// Almost everything generic (logger, middleware, database pool,
+// migrations, health endpoints, JWT check) comes from the shared
+// library libs/go — the same code the auth service runs. What is left
+// in this service is what makes it the TODO service: the todos table
+// and its rules.
 package main
 
 import (
@@ -10,18 +28,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
-
-	// Shared code (libs/go): the same packages every Go service will use.
+	// Shared code (libs/go): the same packages every Go service uses.
 	"github.com/MirajHoque/todo-microservice/libs/go/jwtauth"
 	"github.com/MirajHoque/todo-microservice/libs/go/logger"
-	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
+	"github.com/MirajHoque/todo-microservice/libs/go/postgres"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/config"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/handlers"
-	"github.com/MirajHoque/todo-microservice/services/api/migrations"
+	// This service's own code. No other service may import these
+	// (Go enforces it: "internal" packages are private to the module).
+	"github.com/MirajHoque/todo-microservice/services/todo/internal/config"
+	"github.com/MirajHoque/todo-microservice/services/todo/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/todo/internal/handlers"
+	"github.com/MirajHoque/todo-microservice/services/todo/migrations"
 	// <pathOftheModule>/<packageWantToImport>
 )
 
@@ -29,7 +46,7 @@ import (
 var version = "dev"
 
 func main() {
-	// `todo-app healthcheck` is used by the Docker HEALTHCHECK.
+	// `todo healthcheck` is used by the Docker HEALTHCHECK.
 	// The runtime image has no shell or wget, so the binary checks itself.
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
@@ -43,8 +60,8 @@ func main() {
 	}
 
 	// ── 2. Logger ──────────────────────────────────────────────────────────
-	log := logger.New("todo-app", cfg.LogFormat, cfg.LogLevel, cfg.Env)
-	log.Info("starting todo-app",
+	log := logger.New(handlers.ServiceName, cfg.LogFormat, cfg.LogLevel, cfg.Env)
+	log.Info("starting todo service",
 		slog.String("version", version),
 		slog.String("env", cfg.Env),
 		slog.String("addr", cfg.Addr()),
@@ -53,7 +70,12 @@ func main() {
 	// ── 3. Database ────────────────────────────────────────────────────────
 	ctx := context.Background()
 
-	database, err := db.Connect(ctx, cfg, log)
+	database, err := postgres.Connect(ctx, postgres.Config{
+		URL:         cfg.DatabaseURL,
+		MaxConns:    cfg.DBMaxConns,
+		MinConns:    cfg.DBMinConns,
+		MaxConnIdle: cfg.DBMaxConnIdle,
+	}, log)
 	if err != nil {
 		log.Error("failed to connect to database",
 			slog.String(logger.FieldError, err.Error()),
@@ -71,51 +93,19 @@ func main() {
 	}
 
 	// ── 5. Services & repositories ─────────────────────────────────────────
-	// This service only CHECKS tokens (shared library). Creating them —
-	// register, login, logout — moved to services/auth in step 3b, and
-	// with it the users. What is left here is todos only.
+	// This service only CHECKS tokens (shared library); creating them is
+	// the auth service's job.
 	jwtVerifier := jwtauth.NewVerifier(cfg.JWTSecret)
 	todoRepo := db.NewTodoRepository(database)
 
-	// The AI agent used to live here too (internal/agents). Since step 2f
-	// it is its own service: services/agent (Python), on port 8083.
-
-	// ── 6. Handlers ────────────────────────────────────────────────────────
+	// ── 6. Handlers and routes (internal/handlers/routes.go) ───────────────
 	todoHandler := handlers.NewTodoHandler(todoRepo)
+	router := handlers.NewRouter(log, database, jwtVerifier, todoHandler)
 
-	// ── 7. Router ──────────────────────────────────────────────────────────
-	r := chi.NewRouter()
-
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger(log))
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestLog)
-	r.Use(chimiddleware.StripSlashes)
-
-	// (The old HTML pages are gone: the UI is web/, on localhost:3000.)
-
-	// Health
-	r.Get("/health", handlers.Health)
-	r.Get("/health/ready", handlers.NewHealthReady(database))
-
-	// API — /api/v1/auth/... is NOT here any more: services/auth (:8081).
-	r.Route("/api/v1", func(r chi.Router) {
-		// Every route needs a valid token.
-		r.Group(func(r chi.Router) {
-			r.Use(jwtVerifier.Middleware)
-
-			// Todos
-			r.Post("/todos", todoHandler.Create)
-			r.Get("/todos", todoHandler.List)
-			r.Patch("/todos/{id}", todoHandler.Update)
-			r.Delete("/todos/{id}", todoHandler.Delete)
-		})
-	})
-
-	// ── 8. HTTP server with graceful shutdown ──────────────────────────────
+	// ── 7. HTTP server with graceful shutdown ──────────────────────────────
 	srv := &http.Server{
 		Addr:         cfg.Addr(),
-		Handler:      r,
+		Handler:      router,
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
 		IdleTimeout:  cfg.IdleTimeout,
@@ -157,7 +147,7 @@ func main() {
 func healthcheck() int {
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8082"
 	}
 
 	client := &http.Client{Timeout: 3 * time.Second}

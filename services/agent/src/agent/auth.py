@@ -13,13 +13,13 @@ is genuine and reads the user id from it:
   4. iss        — issued by "todo-app"
   5. user_id    — present → that's the caller
 
-Same checks and the same 401 messages as the Go api's middleware
-(services/api/internal/auth), so clients see one behaviour.
+Same checks and the same 401 messages as the Go services' middleware
+(libs/go/jwtauth), so clients see one behaviour.
 
 Routes use it by declaring a parameter `caller: CurrentUser`.
 FastAPI runs `current_user` first; if it raises, the route never runs.
 `caller.user_id` says who it is; `caller.token` is kept so the agent
-can call the api *as this user* (see todo_client.py).
+can call the todo service *as this user* (see todo_client.py).
 """
 
 from dataclasses import dataclass
@@ -32,7 +32,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from agent.config import get_settings
 from agent.log import user_id_var
 
-ALGORITHMS = ["HS256"]  # what the api signs with — accept nothing else
+ALGORITHMS = ["HS256"]  # what the auth service signs with — accept nothing else
 
 # Declares "this API uses Bearer tokens" in the OpenAPI contract, so the
 # /docs page shows an Authorize button and a lock on protected routes.
@@ -44,7 +44,7 @@ bearer_scheme = HTTPBearer(auto_error=False, description="Paste the JWT from /au
 @dataclass(frozen=True)  # a small read-only record (like a Go struct)
 class Caller:
     user_id: str  # from the verified token
-    token: str  # the raw JWT, forwarded when the agent calls the api
+    token: str  # the raw JWT, forwarded when the agent calls the todo service
 
 
 class AuthError(Exception):

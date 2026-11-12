@@ -1,10 +1,10 @@
 // Package models defines the core domain types for the todo application.
 /*
  domain types" it just means "types that describe the real world problem"
- — Users and Todos, not HTTP or SQL.
+ — Todos, not HTTP or SQL.
 */
 
-// models.go describes what things are (User, Todo) and what makes them valid.
+// models.go describes what things are (Todo) and what makes them valid.
 // It does not care how they travel over the internet or how they are stored in a database.
 
 // Rules for this package:
@@ -19,34 +19,15 @@ import (
 	"time"
 )
 
-// ---- User -------------------------------------------------------------------
+// (The User type moved to services/auth in step 3b — this service
+// only knows a user as the `user_id` string inside the JWT.)
 
-// User represents an authenticated account in the system.
-// name,type, sturct tag
+// ---- Todo -------------------------------------------------------------------
+
+// A struct field is: name, type, struct tag.
 // Struct tags are metadata that tell the encoder/decoder how to name or handle fields.
 //
 //	tags only control the keys
-type User struct {
-	ID           string    `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"` // never serialise the hash
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
-// Validate checks that a User is internally consistent.
-func (u *User) Validate() error {
-	u.Email = strings.TrimSpace(strings.ToLower(u.Email))
-	if u.Email == "" {
-		return fmt.Errorf("user: email is required")
-	}
-	if !strings.Contains(u.Email, "@") {
-		return fmt.Errorf("user: %q is not a valid email address", u.Email)
-	}
-	return nil
-}
-
-// ---- Todo -------------------------------------------------------------------
 
 // Priority controls how urgent a todo item is.
 // Custom Type, replicate Enum in C#/Java
@@ -103,38 +84,6 @@ func (t *Todo) Complete() {
 // ---- Request / Response types -----------------------------------------------
 // These are the HTTP layer types — separate from domain models on purpose.
 // If the API contract changes, only these change, not the domain model.
-
-// RegisterRequest is the body expected on POST /api/v1/auth/register.
-type RegisterRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-func (r *RegisterRequest) Validate() error {
-	r.Email = strings.TrimSpace(strings.ToLower(r.Email))
-	if r.Email == "" {
-		return fmt.Errorf("email is required")
-	}
-	if !strings.Contains(r.Email, "@") {
-		return fmt.Errorf("%q is not a valid email", r.Email)
-	}
-	if len(r.Password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters")
-	}
-	return nil
-}
-
-// LoginRequest is the body expected on POST /api/v1/auth/login.
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-// AuthResponse is returned after a successful login or register.
-type AuthResponse struct {
-	Token string `json:"token"`
-	User  *User  `json:"user"`
-}
 
 // CreateTodoRequest is the body expected on POST /api/v1/todos.
 type CreateTodoRequest struct {

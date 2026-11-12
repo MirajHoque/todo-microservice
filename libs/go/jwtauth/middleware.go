@@ -12,6 +12,8 @@
 // 5. Call the next handler
 //
 // If any step fails → return 401 immediately. Handler never runs.
+// The 401 has the same JSON shape as every other error (package
+// respond): {"error": "...", "request_id": "..."}.
 package jwtauth
 
 import (
@@ -21,6 +23,7 @@ import (
 
 	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
+	"github.com/MirajHoque/todo-microservice/libs/go/respond"
 )
 
 // Middleware returns an HTTP middleware that validates JWT tokens.
@@ -40,7 +43,7 @@ func (v *Verifier) Middleware(next http.Handler) http.Handler {
 			log.Warn("missing authorization header",
 				slog.String(logger.FieldAction, "auth_missing_header"),
 			)
-			writeUnauthorized(w, "missing authorization header")
+			respond.Error(w, r, http.StatusUnauthorized, "missing authorization header")
 			return
 		}
 
@@ -52,7 +55,7 @@ func (v *Verifier) Middleware(next http.Handler) http.Handler {
 			log.Warn("malformed authorization header",
 				slog.String(logger.FieldAction, "auth_malformed_header"),
 			)
-			writeUnauthorized(w, "authorization header must be: Bearer <token>")
+			respond.Error(w, r, http.StatusUnauthorized, "authorization header must be: Bearer <token>")
 			return
 		}
 		tokenString := parts[1]
@@ -64,7 +67,7 @@ func (v *Verifier) Middleware(next http.Handler) http.Handler {
 				slog.String(logger.FieldAction, "auth_invalid_token"),
 				slog.String(logger.FieldError, err.Error()),
 			)
-			writeUnauthorized(w, err.Error())
+			respond.Error(w, r, http.StatusUnauthorized, err.Error())
 			return
 		}
 
@@ -85,11 +88,4 @@ func (v *Verifier) Middleware(next http.Handler) http.Handler {
 		// ── 5. Call the next handler ──────────────────────────────────────
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// writeUnauthorized writes a 401 response with a JSON error body.
-func writeUnauthorized(w http.ResponseWriter, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"error":"` + msg + `"}`))
 }

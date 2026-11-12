@@ -1,6 +1,10 @@
 // Package db - user_repository.go
 // Contains all database operations related to users.
 //
+// The `users` table has exactly ONE owner: this service (ROADMAP rule
+// 3). No other service has a query against it — or even a login for
+// this database (auth_db).
+//
 // REPOSITORY PATTERN
 // ==================
 // A repository is a Go struct that owns all database queries
@@ -19,19 +23,21 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/MirajHoque/todo-microservice/libs/go/postgres"
+	"github.com/MirajHoque/todo-microservice/services/auth/internal/models"
 )
 
 // UserRepository handles all database operations for the users table.
 type UserRepository struct {
-	db *DB
+	db *postgres.DB
 }
 
 // NewUserRepository creates a UserRepository.
 // Called once in main.go and passed to the auth handler.
-func NewUserRepository(db *DB) *UserRepository {
+func NewUserRepository(db *postgres.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
@@ -92,32 +98,6 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 			return nil, ErrUserNotFound
 		}
 		return nil, fmt.Errorf("user repo: find by email: %w", err)
-	}
-
-	return user, nil
-}
-
-// FindByID looks up a user by their ID.
-// Used by the JWT middleware to verify the user still exists.
-func (r *UserRepository) FindByID(ctx context.Context, id string) (*models.User, error) {
-	user := &models.User{}
-
-	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id, email, created_at, updated_at
-		FROM users
-		WHERE id = $1
-	`, id).Scan(
-		&user.ID,
-		&user.Email,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
-		}
-		return nil, fmt.Errorf("user repo: find by id: %w", err)
 	}
 
 	return user, nil

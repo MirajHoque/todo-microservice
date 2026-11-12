@@ -27,10 +27,9 @@ type Config struct {
 	DBMinConns    int32
 	DBMaxConnIdle time.Duration
 
-	// Auth
-	JWTSecret  string
-	JWTExpiry  time.Duration
-	BCryptCost int
+	// Auth — only for CHECKING tokens; must equal the auth service's JWT_SECRET.
+	// (JWT_EXPIRY and BCRYPT_COST moved to services/auth with login/register.)
+	JWTSecret string
 
 	// Logging
 	LogLevel  string // "debug" | "info" | "warn" | "error"
@@ -57,9 +56,7 @@ func Load() (*Config, error) {
 		DBMaxConnIdle: getDuration("DB_MAX_CONN_IDLE", 5*time.Minute),
 
 		// Auth
-		JWTSecret:  requireEnv("JWT_SECRET"),
-		JWTExpiry:  getDuration("JWT_EXPIRY", 24*time.Hour),
-		BCryptCost: getInt("BCRYPT_COST", 12),
+		JWTSecret: requireEnv("JWT_SECRET"),
 
 		// Logging
 		LogLevel:  getEnv("LOG_LEVEL", "info"),
@@ -77,9 +74,6 @@ func Load() (*Config, error) {
 func (c *Config) validate() error {
 	if c.Env != "development" && c.Env != "production" {
 		return fmt.Errorf("config: ENV must be 'development' or 'production', got %q", c.Env)
-	}
-	if c.BCryptCost < 10 || c.BCryptCost > 31 {
-		return fmt.Errorf("config: BCRYPT_COST must be between 10 and 31, got %d", c.BCryptCost)
 	}
 	if len(c.JWTSecret) < 32 {
 		return fmt.Errorf("config: JWT_SECRET must be at least 32 characters")

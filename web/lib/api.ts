@@ -61,11 +61,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
 
   if (!res.ok) {
-    // Both services send {"error": "...", "request_id": "..."}. If a
+    // Every service sends {"error": "...", "request_id": "..."}. If a
     // service is down, web's proxy answers 500 with plain text instead —
     // so no JSON body + a 5xx means "that service did not answer".
     const err = (await res.json().catch(() => null)) as ErrorResponse | null;
-    const service = path.startsWith("/agent") ? "agent" : "api";
+    const service = path.startsWith("/agent")
+      ? "agent"
+      : path.startsWith("/auth")
+        ? "auth service"
+        : "api";
     const message =
       err?.error ??
       (res.status >= 500 ? `Cannot reach the ${service}. Is it running?` : res.statusText);

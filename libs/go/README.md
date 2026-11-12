@@ -8,6 +8,9 @@ service: no `main.go`, no port, no `.env`. Services import it.
 | `logger` | JSON logs with the same field names in every service (`service`, `request_id`, `user_id`, …) |
 | `middleware` | HTTP middleware: request id, per-request logger, access log, panic recovery, user id in the request context |
 | `jwtauth` | **Checks** JWTs (`Verifier`) and protects routes (`Verifier.Middleware`) |
+| `respond` | JSON responses; the error shape `{"error", "request_id"}` every service uses |
+| `postgres` | Connection pool (`Connect`) and the migration runner (`Migrate`) — no SQL about any table |
+| `health` | The two health endpoints: `GET /health` and `GET /health/ready` |
 
 ## The rule: generic only
 

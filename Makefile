@@ -10,7 +10,9 @@
 #                                  + create each service's user/database
 #   make svc SERVICE=api CMD=dev → run one service natively
 #   make psql                    → psql shell in the api's database (todo)
+#   make psql-auth               → psql shell in the auth service's database (auth_db)
 #   make psql-agent              → psql shell in the agent's database (agent_db)
+#   make db-copy-users           → one-time: copy users from the api's database to auth_db
 #   make db-stop                 → stop Postgres (data is kept)
 #   make db-reset                → delete Postgres and all its data
 #
@@ -33,7 +35,7 @@ DB_USER      := todo
 DB_PASSWORD  := todo
 DB_NAME      := todo
 
-.PHONY: db db-init db-stop db-reset psql psql-agent up down logs svc help
+.PHONY: db db-init db-copy-users db-stop db-reset psql psql-auth psql-agent up down logs svc help
 
 ## db: start Postgres in Docker (creates it the first time) and wait until ready
 #  First run: `docker run` downloads the image (if needed) and creates the
@@ -59,7 +61,30 @@ db:
 ## db-init: create each service's user + database (safe to re-run; see db/init.sql)
 db-init:
 	@docker exec -i $(DB_CONTAINER) psql -q -v ON_ERROR_STOP=1 -U $(DB_USER) -d postgres < db/init.sql
-	@echo "✓ Databases ready: todo (user todo), agent_db + agent_db_test (user agent)"
+	@echo "✓ Databases ready: todo (user todo), auth_db + auth_db_test (user auth), agent_db + agent_db_test (user agent)"
+
+## db-copy-users: one-time (step 3b): copy the users from the api's database (todo) to auth_db
+#  Users used to live in the api's database; now the auth service owns
+#  them. This copies every account (same id, same password hash), so
+#  people can still log in and their todos still belong to them.
+#
+#  How: the first psql prints the users as text (COPY … TO STDOUT), the
+#  "|" pipes that text into a second psql connected to auth_db, which
+#  reads it into a temporary table and inserts the rows that are not
+#  there yet. Safe to run again: existing users are skipped.
+#  Start the auth service once before this — it creates the users table.
+#  It runs as the `todo` superuser, the only user allowed into both
+#  databases; the services themselves can't do this (and shouldn't).
+USER_COLUMNS := id, email, password_hash, created_at, updated_at
+db-copy-users:
+	@docker exec $(DB_CONTAINER) psql -q -v ON_ERROR_STOP=1 -U $(DB_USER) -d $(DB_NAME) \
+		-c "COPY (SELECT $(USER_COLUMNS) FROM users) TO STDOUT" \
+	| docker exec -i $(DB_CONTAINER) psql -q -v ON_ERROR_STOP=1 -U $(DB_USER) -d auth_db \
+		-c "CREATE TEMP TABLE incoming (LIKE users)" \
+		-c "COPY incoming ($(USER_COLUMNS)) FROM STDIN" \
+		-c "INSERT INTO users ($(USER_COLUMNS)) SELECT $(USER_COLUMNS) FROM incoming ON CONFLICT DO NOTHING"
+	@echo "✓ Users in auth_db: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d auth_db -c 'SELECT count(*) FROM users')" \
+		"(api's database: $$(docker exec $(DB_CONTAINER) psql -tA -U $(DB_USER) -d $(DB_NAME) -c 'SELECT count(*) FROM users'))"
 
 ## db-stop: stop Postgres (data stays in the volume)
 db-stop:
@@ -73,6 +98,10 @@ db-reset:
 ## psql: open a psql shell in the api's database (todo)
 psql:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME)
+
+## psql-auth: open a psql shell in the auth service's database, as the auth user
+psql-auth:
+	docker exec -it $(DB_CONTAINER) psql -U auth -d auth_db
 
 ## psql-agent: open a psql shell in the agent's database, as the agent user
 psql-agent:

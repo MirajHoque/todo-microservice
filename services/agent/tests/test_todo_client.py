@@ -4,8 +4,9 @@ Part 1 uses a FAKE api (httpx2.MockTransport): a Python function that
 plays the api, so we can check exactly what the client sends and how
 it handles every answer — no network, nothing running.
 
-Part 2 talks to the REAL Go api (skipped if it isn't running):
-the agent service and the api service, actually talking.
+Part 2 talks to the REAL Go services (skipped if they aren't running):
+a user registers at the auth service, then the agent's client uses
+that user's token at the api — three services, actually talking.
 """
 
 import asyncio
@@ -121,16 +122,18 @@ def test_api_too_slow_is_504():
 
 # ── Part 2: against the real Go api ──────────────────────────
 
-API_URL = "http://localhost:8080"
+API_URL = "http://localhost:8080"  # todos
+AUTH_URL = "http://localhost:8081"  # register / login (its own service since step 3b)
 
 
 @pytest.fixture
 def real_caller() -> Caller:
-    """Register a fresh user on the real api; skip if the api isn't running."""
+    """Register a fresh user at the real auth service; skip if a service isn't running."""
     try:
+        httpx2.get(f"{API_URL}/health", timeout=5)
         body = _register()
     except httpx2.HTTPError:
-        pytest.skip("Go api not running — start it with `make dev` in services/api")
+        pytest.skip("needs the Go api AND the auth service: `make dev` in services/api and auth")
     return Caller(user_id=body["user"]["id"], token=body["token"])
 
 
@@ -177,10 +180,10 @@ def test_cannot_touch_another_users_todos(real_caller):
 
 
 def _register() -> dict:
-    """Create a fresh user on the real api → {"token": ..., "user": {...}}."""
+    """Create a fresh user at the real auth service → {"token": ..., "user": {...}}."""
     email = f"agent-test-{uuid.uuid4().hex[:8]}@example.com"
     res = httpx2.post(
-        f"{API_URL}/api/v1/auth/register",
+        f"{AUTH_URL}/api/v1/auth/register",
         json={"email": email, "password": "password123"},
         timeout=5,
     )

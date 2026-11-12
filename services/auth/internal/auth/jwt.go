@@ -4,12 +4,12 @@
 // JWT logic is neither HTTP (handlers) nor database (db).
 // It is a pure service — takes a user ID, returns a token string.
 //
-// WHERE DID VALIDATION GO? (step 3a)
-// Checking a token is needed by every service, so it moved to the
+// WHERE IS VALIDATION?
+// Checking a token is needed by every service, so it lives in the
 // shared library: libs/go/jwtauth (Verifier + the HTTP middleware).
-// Creating a token stays here: it will move to services/auth, the only
-// service allowed to issue tokens. The Claims type is shared, so the
-// token we write here is exactly what jwtauth reads.
+// Creating a token happens ONLY here, in the auth service — it is the
+// one service that may say "this person logged in". The Claims type is
+// shared, so the token we write here is exactly what jwtauth reads.
 package auth
 
 import (

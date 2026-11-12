@@ -5,6 +5,7 @@
 package jwtauth
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
+	"github.com/MirajHoque/todo-microservice/libs/go/respond"
 )
 
 const secret = "test-secret-at-least-32-characters-long"
@@ -87,10 +89,11 @@ func TestMiddleware(t *testing.T) {
 	// The "handler behind the door": remembers who the middleware let in.
 	var sawUser string
 	var called bool
-	handler := verifier.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// RequestID runs first, as in a real service: the 401 needs the id.
+	handler := middleware.RequestID(verifier.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		sawUser = middleware.GetUserID(r.Context())
-	}))
+	})))
 
 	tests := []struct {
 		name       string
@@ -108,6 +111,7 @@ func TestMiddleware(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			called, sawUser = false, ""
 			req := httptest.NewRequest(http.MethodGet, "/todos", nil)
+			req.Header.Set("X-Request-ID", "req-1")
 			if tt.header != "" {
 				req.Header.Set("Authorization", tt.header)
 			}
@@ -117,6 +121,16 @@ func TestMiddleware(t *testing.T) {
 
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			// A 401 is JSON with the request id, like every other error.
+			if tt.wantStatus == http.StatusUnauthorized {
+				var body respond.ErrorBody
+				if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+					t.Fatalf("401 body is not JSON: %v\n%s", err, rec.Body.String())
+				}
+				if body.Error == "" || body.RequestID != "req-1" {
+					t.Errorf("401 body = %+v, want an error and request_id req-1", body)
+				}
 			}
 			if sawUser != tt.wantUser {
 				t.Errorf("user id = %q, want %q", sawUser, tt.wantUser)

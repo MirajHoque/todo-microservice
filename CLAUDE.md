@@ -19,25 +19,30 @@ and the current step. Tick off steps there as they are completed.
 
 ## Layout
 
-- `services/api/` — the Go monolith (temporary; will be split into `auth` and `todo`)
-- `libs/go/` — Go code shared by the Go services (own module): `logger`, `middleware`, `jwtauth`.
+- `services/api/` — what is left of the Go monolith: todos only (port 8080, temporary; becomes `services/todo`)
+- `services/auth/` — Go auth service (port 8081, `auth_db`): register/login/logout, the only one that
+  creates JWTs. `make dev`/`make test` (tests use `auth_db_test`, need `make db`)
+- `libs/go/` — Go code shared by the Go services (own module): `logger`, `middleware`, `jwtauth`,
+  `postgres` (pool + migrations), `respond` (JSON errors), `health`.
   Generic only (ROADMAP rule 4). Services use it via a `replace ../../libs/go` line in `go.mod`;
   check with `cd libs/go && make check && make test`
 - `services/agent/` — Python/FastAPI agent service (port 8083): orchestrator + todo + planner agents;
   `uv` + `make dev`/`make test`/`make lint`. Errors and log fields match the Go api.
-- `web/` — Next.js frontend (port 3000); `web/proxy.ts` forwards `/api/v1/agent/...` to
-  `AGENT_URL` (:8083) and every other `/api/...` to `API_URL` (:8080)
+- `web/` — Next.js frontend (port 3000); `web/proxy.ts` forwards `/api/v1/auth/...` to
+  `AUTH_URL` (:8081), `/api/v1/agent/...` to `AGENT_URL` (:8083) and every other `/api/...` to `API_URL` (:8080)
 - `compose.yaml` — **parked**: not used or updated until all services exist (see ROADMAP)
 - `Makefile` — `make db`, `make psql`, `make db-stop`, `make svc SERVICE=api CMD=test`
 - `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)
 
 ## Commands
 
-- Build/vet/test the api: `cd services/api && go build ./... && go vet ./... && go test ./...`
+- Build/vet/test a Go service: `cd services/api && go build ./... && go vet ./... && go test ./...`
+  (same in `services/auth`, where `make test` needs `make db`)
 - Go Docker images are built from the repo root (they need `libs/go`):
   `docker build -f services/api/Dockerfile -t todo-app .`
-- Run locally: `make db` (Postgres via plain `docker run`), then
-  `cd services/api && make dev` (needs `services/api/.env`, copied from `.env.example`).
+- Run locally: `make db` (Postgres via plain `docker run`), then `make dev` in `services/auth`
+  and in `services/api` (each needs its `.env`, copied from `.env.example`; `JWT_SECRET` must be
+  the same in auth, api and agent).
   The owner runs each service natively, one terminal each, to learn how
   services find each other. Every new service needs its own native run
   path (`make dev` / `npm run dev`, own `.env`, own port) — don't add it to compose.
@@ -48,9 +53,10 @@ and the current step. Tick off steps there as they are completed.
 - Local Postgres: `localhost:5433` (5432 is taken by a Postgres installed on
   the Mac). Container `todo-postgres`, volume `todo-pgdata`. One database + user
   per service, created by `make db` from `db/init.sql`: api → `todo`/`todo`,
+  auth → `auth_db` (+ `auth_db_test`) / `auth`,
   agent → `agent_db` (+ `agent_db_test`) / `agent`. Users can't connect to
   other services' databases.
-- psql shell: `make psql` (todo), `make psql-agent` (agent_db)
+- psql shell: `make psql` (todo), `make psql-auth` (auth_db), `make psql-agent` (agent_db)
 
 ## Git
 

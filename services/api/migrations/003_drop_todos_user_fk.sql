@@ -1,0 +1,25 @@
+-- Migration: 003_drop_todos_user_fk  (step 3b)
+-- Removes the link "todos.user_id must exist in the users table".
+--
+-- WHY?
+-- Users moved to the auth service, which has its own database
+-- (auth_db). A foreign key only works INSIDE one database, so this
+-- one can no longer be kept: a user who registers today exists only in
+-- auth_db, and with the foreign key their first todo would be rejected
+-- ("user_id is not present in table users").
+--
+-- WHAT REPLACES IT?
+-- The JWT. This service takes user_id from a token that the auth
+-- service signed, so the id always belongs to a real account. That is
+-- how every service knows users from now on: by id, never by table.
+--
+-- WHAT WE GIVE UP
+-- "ON DELETE CASCADE": deleting a user no longer deletes their todos
+-- automatically. When account deletion is added, the auth service will
+-- have to TELL the other services (an event — see Kafka in the roadmap).
+--
+-- The old `users` table in this database is not used any more. It is
+-- left alone here (nothing is deleted in this step) and goes away
+-- together with this database in step 3d.
+
+ALTER TABLE todos DROP CONSTRAINT IF EXISTS todos_user_id_fkey;

@@ -20,8 +20,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/config"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

@@ -1,11 +1,15 @@
-// Package middleware provides HTTP middleware for the todo app.
+// Package middleware provides the HTTP middleware every Go service uses.
 //
-// Middleware chain (applied in order by main.go):
+// SHARED CODE (libs/go): generic only — it knows about requests, logs
+// and "some user id", never about users or todos (ROADMAP rule 4).
+//
+// Middleware chain (applied in order by each service's main.go):
 //  1. RequestID   — stamps every request with a unique ID
 //  2. Logger      — attaches a child logger (with request_id) to context
 //  3. RequestLog  — logs method, path, status, duration on every request
 //  4. Recoverer   — catches panics, logs them, returns 500
-//  5. Auth        — validates JWT, attaches user_id to context (protected routes only)
+//  5. Auth        — validates JWT, attaches user_id to context (protected routes
+//     only; lives in the jwtauth package)
 package middleware
 
 import (
@@ -14,7 +18,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 	"github.com/google/uuid"
 )
 
@@ -167,9 +171,9 @@ func Recoverer(next http.Handler) http.Handler {
 }
 
 // ---- UserID context helpers -------------------------------------------------
-// These are used by the Auth middleware (step 4) and by the Logger middleware above.
+// These are used by the auth middleware (package jwtauth) and by the Logger middleware above.
 
-// SetUserID stores a user ID in the context. Called by the Auth middleware.
+// SetUserID stores a user ID in the context. Called by jwtauth's middleware.
 func SetUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, userIDKey{}, userID)
 }

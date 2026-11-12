@@ -13,10 +13,10 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
+	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/auth"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )

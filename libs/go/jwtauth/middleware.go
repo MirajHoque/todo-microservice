@@ -1,4 +1,4 @@
-// auth_middleware.go — validates JWT on every protected route.
+// middleware.go — validates the JWT on every protected route.
 //
 // HOW IT WORKS
 // ============
@@ -7,30 +7,30 @@
 //
 // 1. Read Authorization header: "Bearer <token>"
 // 2. Extract the token string
-// 3. Validate it using the JWT service
+// 3. Validate it (ValidateToken in jwtauth.go)
 // 4. Put user_id into context
 // 5. Call the next handler
 //
 // If any step fails → return 401 immediately. Handler never runs.
-package auth
+package jwtauth
 
 import (
 	"log/slog"
 	"net/http"
 	"strings"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
+	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
 )
 
 // Middleware returns an HTTP middleware that validates JWT tokens.
 // Use it to protect route groups in main.go:
 //
 //	r.Group(func(r chi.Router) {
-//	    r.Use(authService.Middleware)
+//	    r.Use(verifier.Middleware)
 //	    r.Post("/todos", handlers.CreateTodo)
 //	})
-func (s *Service) Middleware(next http.Handler) http.Handler {
+func (v *Verifier) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log := logger.FromContext(r.Context())
 
@@ -58,7 +58,7 @@ func (s *Service) Middleware(next http.Handler) http.Handler {
 		tokenString := parts[1]
 
 		// ── 3. Validate the token ─────────────────────────────────────────
-		claims, err := s.ValidateToken(tokenString)
+		claims, err := v.ValidateToken(tokenString)
 		if err != nil {
 			log.Warn("invalid token",
 				slog.String(logger.FieldAction, "auth_invalid_token"),

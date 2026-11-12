@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/logger"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/middleware"
+	"github.com/MirajHoque/todo-microservice/libs/go/logger"
+	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
 )
 

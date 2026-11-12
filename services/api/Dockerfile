@@ -8,9 +8,16 @@
 # Migrations and HTML templates are embedded in the binary
 # (go:embed), so the runtime image needs nothing else.
 #
-# Build:
-#   docker build --build-arg VERSION=$(git describe --tags --always) \
+# Build — from the REPO ROOT, not from services/api (step 3a):
+# the api imports the shared library in libs/go, so the build must
+# be able to see both folders. "-f" says where this Dockerfile is,
+# the final "." is the build context (= the repo root).
+#
+#   docker build -f services/api/Dockerfile \
+#                --build-arg VERSION=$(git describe --tags --always) \
 #                --build-arg REVISION=$(git rev-parse HEAD) -t todo-app .
+#
+# What is left out of the context: services/api/Dockerfile.dockerignore
 # ============================================================
 
 # Keep in sync with the `go` line in go.mod.
@@ -26,16 +33,22 @@ ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666ba
 # Apple Silicon) and cross-compiles to TARGETOS/TARGETARCH.
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS builder
 
-WORKDIR /src
+# Same folder layout as the repo, so the "replace ../../libs/go"
+# line in go.mod finds the shared library inside the image too.
+WORKDIR /src/services/api
 
 # Copy dependency files first — this layer is cached until
 # go.mod/go.sum change. The cache mount keeps downloaded modules
 # between builds, so a go.mod change only fetches what's new.
-COPY go.mod go.sum ./
+# The shared library's go.mod is needed too: `go mod download`
+# reads it to know the library's own dependencies.
+COPY libs/go/go.mod libs/go/go.sum /src/libs/go/
+COPY services/api/go.mod services/api/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
   go mod download && go mod verify
 
-COPY . .
+COPY libs/go /src/libs/go
+COPY services/api .
 
 ARG TARGETOS
 ARG TARGETARCH

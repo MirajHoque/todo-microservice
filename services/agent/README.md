@@ -204,8 +204,8 @@ message ("todo not found", …); api down → 503, too slow → 504.
 
 ## Auth
 
-This service has no users and never sees passwords. The api issues a JWT
-at login; this service only **verifies** it (`src/agent/auth.py`):
+This service has no users and never sees passwords. The auth service
+(`services/auth`) issues a JWT at login; this service only **verifies** it (`src/agent/auth.py`):
 signature (shared `JWT_SECRET`), algorithm HS256 only, not expired,
 issuer `todo-app`, and reads `user_id` from it. Errors match the Go api:
 `missing authorization header`, `authorization header must be: Bearer <token>`,
@@ -246,7 +246,7 @@ that has already run.
 |---|---|---|
 | `make install` | Install dependencies into `.venv/` | `go mod download` |
 | `make dev` | Run with auto-reload | `make dev` (`go run`) |
-| `make test` | Run tests (`pytest`; DB tests need `make db`, real-api tests need the api running — else skipped) | `go test ./...` |
+| `make test` | Run tests (`pytest`; DB tests need `make db`, real-api tests need the api and the auth service running — else skipped) | `go test ./...` |
 | `make lint` | Lint + format check (`ruff`) | `go vet` + `gofmt -l` |
 | `make fmt` | Fix formatting | `gofmt -w` |
 

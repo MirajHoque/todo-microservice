@@ -18,12 +18,10 @@ import (
 	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
 
-	"github.com/MirajHoque/todo-microservice/services/api/internal/auth"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/config"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
 	"github.com/MirajHoque/todo-microservice/services/api/internal/handlers"
 	"github.com/MirajHoque/todo-microservice/services/api/migrations"
-	"github.com/MirajHoque/todo-microservice/services/api/web"
 	// <pathOftheModule>/<packageWantToImport>
 )
 
@@ -73,20 +71,17 @@ func main() {
 	}
 
 	// ── 5. Services & repositories ─────────────────────────────────────────
-	// Two halves of JWT: jwtService CREATES tokens (login/register — auth
-	// only), jwtVerifier CHECKS them (shared library, every service).
-	jwtService := auth.NewService(cfg.JWTSecret, cfg.JWTExpiry)
+	// This service only CHECKS tokens (shared library). Creating them —
+	// register, login, logout — moved to services/auth in step 3b, and
+	// with it the users. What is left here is todos only.
 	jwtVerifier := jwtauth.NewVerifier(cfg.JWTSecret)
-	userRepo := db.NewUserRepository(database)
 	todoRepo := db.NewTodoRepository(database)
 
-	// The AI agent used to live here (internal/agents). Since step 2f it
-	// is its own service: services/agent (Python), on port 8083.
+	// The AI agent used to live here too (internal/agents). Since step 2f
+	// it is its own service: services/agent (Python), on port 8083.
 
 	// ── 6. Handlers ────────────────────────────────────────────────────────
-	authHandler := handlers.NewAuthHandler(userRepo, jwtService)
 	todoHandler := handlers.NewTodoHandler(todoRepo)
-	pageHandler := handlers.NewPageHandler(web.FS)
 
 	// ── 7. Router ──────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -97,27 +92,17 @@ func main() {
 	r.Use(middleware.RequestLog)
 	r.Use(chimiddleware.StripSlashes)
 
-	// HTML pages
-	r.Get("/", pageHandler.LoginPage)
-	r.Get("/register", pageHandler.RegisterPage)
-	r.Get("/todos", pageHandler.TodosPage)
+	// (The old HTML pages are gone: the UI is web/, on localhost:3000.)
 
 	// Health
 	r.Get("/health", handlers.Health)
 	r.Get("/health/ready", handlers.NewHealthReady(database))
 
-	// API
+	// API — /api/v1/auth/... is NOT here any more: services/auth (:8081).
 	r.Route("/api/v1", func(r chi.Router) {
-		// Public
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
-
-		// Protected
+		// Every route needs a valid token.
 		r.Group(func(r chi.Router) {
 			r.Use(jwtVerifier.Middleware)
-
-			// Auth
-			r.Post("/auth/logout", authHandler.Logout)
 
 			// Todos
 			r.Post("/todos", todoHandler.Create)

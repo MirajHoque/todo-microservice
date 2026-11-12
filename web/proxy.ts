@@ -1,8 +1,9 @@
 // ============================================================
 // proxy.ts — forwards /api/... to the right backend service.
 //
+//   browser ──▶ web:3000/api/v1/auth/...  ──▶ AUTH_URL/api/v1/auth/...    (Go auth service)
 //   browser ──▶ web:3000/api/v1/agent/... ──▶ AGENT_URL/api/v1/agent/...  (Python agent)
-//   browser ──▶ web:3000/api/v1/...       ──▶ API_URL/api/v1/...          (Go api)
+//   browser ──▶ web:3000/api/v1/...       ──▶ API_URL/api/v1/...          (Go api: todos)
 //
 // The browser only ever talks to web (one address). Which service
 // answers is decided HERE, by the path. This is the same job a
@@ -29,8 +30,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Which service owns which path. First match wins, so the more
 // specific prefix comes first; everything else goes to the api.
-// Step 3 adds /api/v1/auth → auth and /api/v1/todos → todo here.
+// Step 3b added /api/v1/auth → auth; step 3c adds /api/v1/todos → todo.
 const ROUTES = [
+  { prefix: "/api/v1/auth", env: "AUTH_URL", fallback: "http://localhost:8081" },
   { prefix: "/api/v1/agent", env: "AGENT_URL", fallback: "http://localhost:8083" },
   { prefix: "/api", env: "API_URL", fallback: "http://localhost:8080" },
 ] as const;

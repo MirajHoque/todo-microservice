@@ -13,12 +13,14 @@ import (
 	"log/slog"
 	"net/http"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/MirajHoque/todo-microservice/libs/go/logger"
 	"github.com/MirajHoque/todo-microservice/libs/go/middleware"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/auth"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/db"
-	"github.com/MirajHoque/todo-microservice/services/api/internal/models"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/MirajHoque/todo-microservice/libs/go/respond"
+	"github.com/MirajHoque/todo-microservice/services/auth/internal/auth"
+	"github.com/MirajHoque/todo-microservice/services/auth/internal/db"
+	"github.com/MirajHoque/todo-microservice/services/auth/internal/models"
 )
 
 // AuthHandler holds the dependencies for auth endpoints.
@@ -26,16 +28,20 @@ import (
 type AuthHandler struct {
 	users      *db.UserRepository
 	jwtService *auth.Service
+	bcryptCost int
 }
 
 // NewAuthHandler creates an AuthHandler with its dependencies.
+// bcryptCost is how slow password hashing is (BCRYPT_COST in .env).
 func NewAuthHandler(
 	users *db.UserRepository,
 	jwtService *auth.Service,
+	bcryptCost int,
 ) *AuthHandler {
 	return &AuthHandler{
 		users:      users,
 		jwtService: jwtService,
+		bcryptCost: bcryptCost,
 	}
 }
 
@@ -51,27 +57,27 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// ── 1. Decode request body ────────────────────────────────────────────
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid request body")
+		respond.Error(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	// ── 2. Validate input ─────────────────────────────────────────────────
 	if err := req.Validate(); err != nil {
-		writeError(w, r, http.StatusBadRequest, err.Error())
+		respond.Error(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// ── 3. Hash the password ──────────────────────────────────────────────
-	// bcrypt.GenerateFromPassword is deliberately slow (cost=12).
+	// bcrypt.GenerateFromPassword is deliberately slow (BCRYPT_COST, default 12).
 	// This makes brute-force attacks impractical even if the DB is stolen.
 	// We never store the raw password — only the hash.
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), h.bcryptCost)
 	if err != nil {
 		log.Error("failed to hash password",
 			slog.String(logger.FieldError, err.Error()),
 			slog.String(logger.FieldAction, "register_hash_fail"),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -79,14 +85,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user, err := h.users.CreateUser(r.Context(), req.Email, string(hash))
 	if err != nil {
 		if errors.Is(err, db.ErrEmailTaken) {
-			writeError(w, r, http.StatusConflict, "email already registered")
+			respond.Error(w, r, http.StatusConflict, "email already registered")
 			return
 		}
 		log.Error("failed to create user",
 			slog.String(logger.FieldError, err.Error()),
 			slog.String(logger.FieldAction, "register_db_fail"),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -97,7 +103,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldError, err.Error()),
 			slog.String(logger.FieldAction, "register_token_fail"),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -106,7 +112,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		slog.String(logger.FieldAction, "register_ok"),
 	)
 
-	writeJSON(w, http.StatusCreated, models.AuthResponse{
+	respond.JSON(w, http.StatusCreated, models.AuthResponse{
 		Token: token,
 		User:  user,
 	})
@@ -124,29 +130,30 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// ── 1. Decode + validate ──────────────────────────────────────────────
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid request body")
+		respond.Error(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Email == "" || req.Password == "" {
-		writeError(w, r, http.StatusBadRequest, "email and password are required")
+		respond.Error(w, r, http.StatusBadRequest, "email and password are required")
 		return
 	}
 
 	// ── 2. Look up user by email ──────────────────────────────────────────
-	user, err := h.users.FindByEmail(r.Context(), req.Email)
+	// Same clean-up as register, so "Ali@Example.com" finds "ali@example.com".
+	user, err := h.users.FindByEmail(r.Context(), models.NormalizeEmail(req.Email))
 	if err != nil {
 		if errors.Is(err, db.ErrUserNotFound) {
 			// IMPORTANT: return the same error message whether the email
 			// doesn't exist OR the password is wrong. This prevents
 			// attackers from enumerating valid email addresses.
-			writeError(w, r, http.StatusUnauthorized, "invalid email or password")
+			respond.Error(w, r, http.StatusUnauthorized, "invalid email or password")
 			return
 		}
 		log.Error("failed to find user",
 			slog.String(logger.FieldError, err.Error()),
 			slog.String(logger.FieldAction, "login_db_fail"),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -159,7 +166,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldAction, "login_wrong_password"),
 		)
 		// Same message as "user not found" — prevents email enumeration.
-		writeError(w, r, http.StatusUnauthorized, "invalid email or password")
+		respond.Error(w, r, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
 
@@ -170,7 +177,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			slog.String(logger.FieldError, err.Error()),
 			slog.String(logger.FieldAction, "login_token_fail"),
 		)
-		writeError(w, r, http.StatusInternalServerError, "internal server error")
+		respond.Error(w, r, http.StatusInternalServerError, "internal server error")
 		return
 	}
 
@@ -182,7 +189,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Clear password hash before sending — extra safety beyond json:"-"
 	user.PasswordHash = ""
 
-	writeJSON(w, http.StatusOK, models.AuthResponse{
+	respond.JSON(w, http.StatusOK, models.AuthResponse{
 		Token: token,
 		User:  user,
 	})
@@ -198,7 +205,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 //
 // The agent's memory is NOT cleared here: it lives in another
 // service (services/agent). web calls DELETE /api/v1/agent/conversation
-// itself on logout — the api doesn't call other services.
+// itself on logout — this service doesn't call other services.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	userID := middleware.GetUserID(r.Context())
@@ -208,7 +215,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		slog.String(logger.FieldAction, "logout_ok"),
 	)
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	respond.JSON(w, http.StatusOK, map[string]string{
 		"message": "logged out successfully",
 	})
 }

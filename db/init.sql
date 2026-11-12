@@ -8,6 +8,7 @@
 --
 --   todo     user → todo     database  (Go api; created by the image's
 --                                        POSTGRES_* variables in `make db`)
+--   auth     user → auth_db  database  (+ auth_db_test for its tests)
 --   agent    user → agent_db database  (+ agent_db_test for its tests)
 --
 -- Run by `make db` / `make db-init`. Safe to run again and again:
@@ -19,6 +20,16 @@
 -- SELECT return nothing when the user/database is already there.
 -- (CREATE DATABASE has no "IF NOT EXISTS" in Postgres, hence the trick.)
 -- ============================================================
+
+-- ── auth service ─────────────────────────────────────────────
+SELECT 'CREATE ROLE auth LOGIN PASSWORD ''auth'''
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'auth')\gexec
+
+SELECT 'CREATE DATABASE auth_db OWNER auth'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'auth_db')\gexec
+
+SELECT 'CREATE DATABASE auth_db_test OWNER auth'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'auth_db_test')\gexec
 
 -- ── agent service ────────────────────────────────────────────
 SELECT 'CREATE ROLE agent LOGIN PASSWORD ''agent'''
@@ -33,7 +44,9 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'agent_db_test')\gexec
 -- ── who may connect where ────────────────────────────────────
 -- By default Postgres lets EVERY user (the PUBLIC group) connect to
 -- every database. Take that away, so only the owner gets in:
--- the agent user cannot open the todo database, and vice versa.
+-- the agent user cannot open the auth or todo database, and so on.
 REVOKE CONNECT ON DATABASE todo          FROM PUBLIC;
+REVOKE CONNECT ON DATABASE auth_db       FROM PUBLIC;
+REVOKE CONNECT ON DATABASE auth_db_test  FROM PUBLIC;
 REVOKE CONNECT ON DATABASE agent_db      FROM PUBLIC;
 REVOKE CONNECT ON DATABASE agent_db_test FROM PUBLIC;

@@ -5,7 +5,8 @@ It owns **no data**: everything it shows comes from the backend services over HT
 
 - Framework: Next.js (App Router) + TypeScript + Tailwind CSS
 - Port: **3000**
-- Talks to: the Go api at `API_URL` (default `http://localhost:8080`) and
+- Talks to: the Go auth service at `AUTH_URL` (default `http://localhost:8081`),
+  the Go api at `API_URL` (default `http://localhost:8080`) and
   the Python agent at `AGENT_URL` (default `http://localhost:8083`)
 
 ## Pages
@@ -22,15 +23,16 @@ The browser only talks to web. Requests to `/api/...` are forwarded by
 the Next.js server to the right service, chosen by path (see `proxy.ts`):
 
 ```
+browser ──▶ localhost:3000/api/v1/auth/login ──▶ AUTH_URL/api/v1/auth/login  (Go auth service)
 browser ──▶ localhost:3000/api/v1/agent/chat ──▶ AGENT_URL/api/v1/agent/chat (Python agent)
 browser ──▶ localhost:3000/api/v1/todos      ──▶ API_URL/api/v1/todos        (Go api)
 ```
 
 So the services need no CORS headers, and the browser never learns
 where they live. If one is down, web's pages still load, but its calls
-fail with "Cannot reach the api" / "Cannot reach the agent".
+fail with "Cannot reach the auth service" / "…the api" / "…the agent".
 
-`API_URL` and `AGENT_URL` are read when the server **starts** (not when
+`AUTH_URL`, `API_URL` and `AGENT_URL` are read when the server **starts** (not when
 it is built), so one Docker image works on your Mac, in Docker and on
 Kubernetes.
 
@@ -41,7 +43,7 @@ Like every service, `web` runs natively in its own terminal
 
 ```bash
 cd web
-cp .env.example .env.local   # first time only — sets API_URL and AGENT_URL
+cp .env.example .env.local   # first time only — sets AUTH_URL, API_URL and AGENT_URL
 npm install                  # first time only — downloads dependencies into node_modules/
 npm run dev                  # http://localhost:3000, reloads when you save a file
 ```
@@ -60,6 +62,7 @@ use this image in step 4.
 ```bash
 docker build -t todo-web web/                 # from the repo root
 docker run --rm -p 3000:3000 \
+  -e AUTH_URL=http://host.docker.internal:8081 \
   -e API_URL=http://host.docker.internal:8080 \
   -e AGENT_URL=http://host.docker.internal:8083 todo-web
 ```
@@ -86,7 +89,7 @@ agent running natively (`make dev` in each).
 | `lib/types.ts` | The API contract as TypeScript types (mirrors the Go models) |
 | `lib/api.ts` | One function per API endpoint (`login()`, `listTodos()`, …) |
 | `lib/session.ts` | Saves/reads the JWT in localStorage |
-| `proxy.ts` | Forwards `/api/...` to `API_URL` |
+| `proxy.ts` | Forwards `/api/...` to `AUTH_URL`, `AGENT_URL` or `API_URL`, by path |
 | `next.config.ts` | Next.js build settings (`output: "standalone"`) |
 | `public/` | Static files served as-is (images, icons) |
 | `Dockerfile`, `.dockerignore` | Builds the production image |

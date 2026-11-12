@@ -5,7 +5,7 @@
 # Stage 1 (builder) — full Go toolchain, compiles the binary
 # Stage 2 (runtime) — distroless, only the binary
 #
-# Migrations and HTML templates are embedded in the binary
+# Migrations are embedded in the binary
 # (go:embed), so the runtime image needs nothing else.
 #
 # Build — from the REPO ROOT, not from services/api (step 3a):

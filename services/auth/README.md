@@ -75,13 +75,6 @@ The `users` table is created by this service's own migration
 (`migrations/001_create_users.sql`, embedded in the binary) when it
 starts.
 
-Coming from before step 3b? Your accounts were in the monolith's database.
-Copy them once (safe to repeat), after starting this service one time:
-
-```bash
-make db-copy-users                        # in the repo root
-```
-
 ## Commands
 
 | Command | What it does |

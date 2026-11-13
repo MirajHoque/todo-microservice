@@ -58,9 +58,12 @@ service's tests, so tests never touch your real data.
 There is also a database called `todo` with a user `todo`. That is the
 server's **admin** user and its default database (the Postgres image
 creates them from the `POSTGRES_*` variables) — which is why the todo
-service's own user is called `todo_svc`. It was the monolith's
-database and still holds its old `users` and `todos` tables; no service
-uses it any more (`make psql` opens it). Step 3d removes those tables.
+service's own user is called `todo_svc`. The admin can see every
+database; only the root `Makefile` uses it, to create the per-service
+users and databases. No service logs in with it, and its `todo`
+database is empty (it was the monolith's database until step 3).
+`make psql` opens a shell as the admin: `\l` lists the databases,
+`\c auth_db` switches to one.
 
 ## Running auth and todo
 
@@ -89,15 +92,6 @@ curl localhost:8081/health/ready   # auth: "database":{"connected":true}
 curl localhost:8082/health/ready   # todo: "database":{"connected":true}
 make psql-auth                     # psql shell in auth_db, try \dt
 make psql-todo                     # psql shell in todo_db
-```
-
-Had accounts and todos before step 3? They were in the monolith's
-database. With auth and todo started once (each creates its own
-table), copy them over:
-
-```bash
-make db-copy-users                 # users → auth_db   (safe to run again)
-make db-copy-todos                 # todos → todo_db   (safe to run again)
 ```
 
 You do **not** create tables yourself. Each service runs its own migrations

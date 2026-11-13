@@ -60,9 +60,9 @@ and the current step. Tick off steps there as they are completed.
   todo → `todo_db` (+ `todo_db_test`) / `todo_svc`,
   agent → `agent_db` (+ `agent_db_test`) / `agent`. Users can't connect to
   other services' databases. The `todo` user/database is the server admin and
-  the old monolith database (unused by services; its tables go in step 3d).
+  its (empty) default database — used only by the root Makefile, never by a service.
 - psql shell: `make psql-auth` (auth_db), `make psql-todo` (todo_db), `make psql-agent` (agent_db),
-  `make psql` (admin, old `todo` database)
+  `make psql` (admin)
 
 ## Git
 

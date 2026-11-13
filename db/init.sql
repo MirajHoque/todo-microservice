@@ -9,9 +9,10 @@
 --   todo     user → todo     database  (the server's ADMIN user and its
 --                                        default database, created by the
 --                                        image's POSTGRES_* variables in
---                                        `make db`. No service uses it any
---                                        more: it was the monolith's database
---                                        and still holds its old tables.)
+--                                        `make db`. No service uses it: it
+--                                        only runs this file. Its database
+--                                        is empty — it was the monolith's
+--                                        until step 3.)
 --   auth     user → auth_db  database  (+ auth_db_test for its tests)
 --   todo_svc user → todo_db  database  (+ todo_db_test for its tests)
 --     (the todo service's user can't be called "todo": that name is

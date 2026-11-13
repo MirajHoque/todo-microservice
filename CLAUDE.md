@@ -33,8 +33,8 @@ and the current step. Tick off steps there as they are completed.
   Its tools call the todo service (`TODO_URL`) with the user's JWT.
 - `web/` — Next.js frontend (port 3000); `web/proxy.ts` forwards `/api/v1/auth/...` to
   `AUTH_URL` (:8081), `/api/v1/todos/...` to `TODO_URL` (:8082) and `/api/v1/agent/...` to `AGENT_URL` (:8083)
-- `compose.yaml` — **parked**: not used or updated until step 3½ (see ROADMAP)
-- `Makefile` — `make db`, `make psql-auth`/`psql-todo`/`psql-agent`, `make db-stop`, `make svc SERVICE=todo CMD=test`
+- `compose.yaml` — the whole system in containers (`make up` / `make ps` / `make logs` / `make down`): same ports and same Postgres volume as the native run, so only one of the two at a time
+- `Makefile` — `make db`, `make psql-auth`/`psql-todo`/`psql-agent`, `make db-stop`, `make svc SERVICE=todo CMD=test`, `make up`/`down`/`ps`/`logs` (compose)
 - `docs/` — roadmap and explanations (`docs/LOCAL_DEV.md`: how to run locally)
 
 ## Commands
@@ -48,7 +48,7 @@ and the current step. Tick off steps there as they are completed.
   `JWT_SECRET` must be the same in all three).
   The owner runs each service natively, one terminal each, to learn how
   services find each other. Every new service needs its own native run
-  path (`make dev` / `npm run dev`, own `.env`, own port) — don't add it to compose.
+  path (`make dev` / `npm run dev`, own `.env`, own port) first; then add it to `compose.yaml` as well.
 - Web: `cd web && npm run dev` (needs `web/.env.local`, copied from `.env.example`);
   check with `npm run lint && npm run build`. Read `web/AGENTS.md` before
   writing Next.js code — this Next.js version differs from older docs.

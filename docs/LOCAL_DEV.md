@@ -1,11 +1,16 @@
 # Running locally
 
-We run **each service natively on your Mac, one terminal per service**.
-Only Postgres runs in Docker. There is no docker compose in the daily
-workflow (yet). That way you see each service start, read its own
-config, log on its own and find the others by address — which is what
-microservices are about. Compose comes back in step 3½
-(see `docs/ROADMAP.md`).
+There are two ways to run the system. Use one at a time — they use the
+same ports and the same data.
+
+1. **Natively, one terminal per service** (this page, the day-to-day
+   way). Only Postgres runs in Docker. You see each service start, read
+   its own config, log on its own and find the others by address —
+   which is what microservices are about. Code changes show up at once.
+2. **Everything in containers with one command**: `make up`
+   (see [Everything in containers](#everything-in-containers-make-up)
+   at the end). Good for a quick "does the whole thing work?" and for
+   testing the Docker images before Kubernetes.
 
 ```
 Terminal 1:  make db                          # Postgres in Docker  → localhost:5433
@@ -165,3 +170,61 @@ If one service is down, the others keep running:
 - stop **todo**: login still works, but the list can't load and the
   chat can't change todos either (the agent's tools call the todo
   service)
+
+## Everything in containers (`make up`)
+
+`compose.yaml` describes the same five pieces as containers: Postgres,
+auth, todo, agent and web. One command builds the images (from the
+same Dockerfiles Kubernetes will use in step 4) and starts them:
+
+```bash
+# first stop the native terminals (Ctrl+C) — the ports are the same
+make up        # build + start everything, waits until all are healthy
+make ps        # what is running?
+make logs      # follow all logs   (one service: make logs SERVICE=auth)
+make down      # stop and remove the containers — your data is kept
+```
+
+Then open http://localhost:3000 as usual. To go back to the native
+way: `make down`, then `make db` and `make dev` in each service.
+
+What is the same as the native run:
+
+- **The ports**: 3000, 8081, 8082, 8083 and 5433. That is why only one
+  way can run at a time ("port is already allocated" means something
+  native is still running).
+- **The data**: compose's Postgres uses the same volume (`todo-pgdata`)
+  as `make db`, so your accounts and todos are there in both. Two
+  Postgres servers must never use one data folder at the same time, so
+  `make up` stops the `make db` container first.
+- **The secrets**: each container reads its service's own `.env`
+  (`services/auth/.env`, …). They must exist, with the same
+  `JWT_SECRET` in all three — exactly as for the native run.
+
+What is different — **the addresses**. Inside a container `localhost`
+is the container itself, not your Mac. Compose puts all containers on
+one private network where each service's name is a hostname, and
+`compose.yaml` replaces the `localhost` addresses from the `.env` files:
+
+| From → To | Native | In compose |
+|---|---|---|
+| auth / todo / agent → Postgres | `localhost:5433` | `postgres:5432` |
+| web → auth | `http://localhost:8081` | `http://auth:8081` |
+| web → todo | `http://localhost:8082` | `http://todo:8082` |
+| web → agent | `http://localhost:8083` | `http://agent:8083` |
+| agent → todo | `http://localhost:8082` | `http://todo:8082` |
+
+Kubernetes works the same way: there the name will be a `Service`.
+
+Good to know:
+
+- After changing code, run `make up` again: it rebuilds only the
+  images whose files changed and restarts those containers.
+- Try stopping one piece, as in the list above:
+  `docker compose stop auth`, then `docker compose start auth`.
+- The Postgres container is called `todo-postgres-1` here (the
+  `make db` one is `todo-postgres`), so for a psql shell use
+  `make psql-auth DB_CONTAINER=todo-postgres-1` (same for the other
+  `psql` targets).
+- On a brand-new machine `make up` alone is enough for the database:
+  on an empty volume Postgres runs `db/init.sql` itself.

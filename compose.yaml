@@ -1,135 +1,205 @@
 # ============================================================
-# compose.yaml
+# compose.yaml — the whole system from one command (step 3½).
 #
-# PARKED: not used day to day. For now each service runs
-# natively and Postgres starts with `make db` (see
-# docs/LOCAL_DEV.md). This file comes back once all services
-# exist (docs/ROADMAP.md, step 3½).
+#   make up      → build the images and start everything
+#   make logs    → follow the logs of all services
+#   make down    → stop and remove the containers (data is kept)
 #
-# Runs every service locally from one command.
+# This is the SECOND way to run the system. The first one — each
+# service natively in its own terminal (docs/LOCAL_DEV.md) — stays
+# the day-to-day way while you change code. Compose runs the same
+# five pieces as containers, built from the same Dockerfiles that
+# Kubernetes will use in step 4:
 #
-# Each service reads its own env file: services/<name>/.env
-# (copy services/<name>/.env.example to get started).
+#   postgres :5433   one server, one database per service
+#   auth     :8081   Go      — accounts and tokens
+#   todo     :8082   Go      — the todos
+#   agent    :8083   Python  — the AI chat
+#   web      :3000   Next.js — the only one the browser talks to
 #
-# Usage:
-#   docker compose up -d          → start in background
-#   docker compose down           → stop
-#   docker compose logs -f        → tail logs
-#   docker compose pull && docker compose up -d  → deploy update
+# Both ways use the same ports and the same Postgres data, so run
+# ONE of them at a time: stop the native terminals (Ctrl+C) before
+# `make up`, and `make down` before going back to `make dev`.
+#
+# How the containers find each other: compose puts them all on one
+# private network where every service's NAME is a hostname. So todo
+# reaches the database at "postgres:5432" and web reaches auth at
+# "http://auth:8081". Inside a container "localhost" is the container
+# itself — that is why the addresses from your .env files (localhost)
+# are replaced in each `environment:` block below.
+#
+# Secrets (JWT_SECRET, OPENROUTER_API_KEY) are NOT in this file: each
+# service still reads its own services/<name>/.env — the same files
+# the native run uses, so they must exist (see each service's README).
 # ============================================================
 
+# Project name: containers are called todo-auth-1, todo-postgres-1, …
+# (Without it compose would use the folder name.)
+name: todo
+
+# ── Settings shared by our four services ─────────────────────
+# "x-…" keys are ignored by compose; "&hardening" gives this block
+# a name and "<<: *hardening" below pastes it into a service
+# (plain YAML, called an anchor). It takes away what the services
+# don't need — the same idea as securityContext in Kubernetes later:
+#   read_only          the container can't change its own files
+#   tmpfs /tmp         …except a scratch folder in memory
+#   cap_drop ALL       no special Linux privileges
+#   no-new-privileges  and no way to gain any
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
 services:
-  api:
-    # Build from the service's own folder — each service is self-contained
-    build:
-      context: ./services/api
-      dockerfile: Dockerfile
-
-    # Tag for the built image. On the server, point this at your
-    # registry (e.g. ghcr.io/mirajhoque/todo-app:1.2.3) so
-    # `docker compose pull` has something to pull.
-    image: todo-api:latest
-
-    # Container name — used by Alloy to find logs
-    container_name: todo-api
-
-    # Always restart if the container crashes or server reboots
-    restart: unless-stopped
-
-    ports:
-      - "8080:8080"
-
-    # Load environment variables from .env file
-    # Never hardcode secrets in compose.yaml
-    env_file:
-      - ./services/api/.env
-
-    # `environment` overrides the same key from env_file.
-    # Inside the compose network, Postgres is reachable by its
-    # service name "postgres" — not "localhost". (localhost inside
-    # a container means the container itself.) .env keeps
-    # localhost so `make dev` on your laptop still works.
-    environment:
-      DATABASE_URL: postgres://todo:todo@postgres:5432/todo?sslmode=disable
-
-    # Don't start until Postgres passes its healthcheck — otherwise
-    # the app boots first, can't connect, and crashes.
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-    # Logging — use the json-file driver so Docker writes
-    # structured logs that Alloy can read
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"    # rotate when file hits 50MB
-        max-file: "5"      # keep 5 rotated files
-
-    # Health check is defined in the Dockerfile (HEALTHCHECK) —
-    # visible in `docker ps` output, no need to repeat it here.
-
-    # Hardening — the app only needs to run one binary and talk
-    # to the network, so take everything else away.
-    read_only: true
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp
-
-    # Resource limits — one runaway container can't take down the host
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
-
-    # Graceful shutdown in main.go waits up to 10s — give it time
-    stop_grace_period: 15s
-
-    # Labels — Alloy uses these to find and tag container logs
-    labels:
-      - "logging=alloy"
-      - "service=todo-api"
-      - "env=production"
-
   # ── Postgres ──────────────────────────────────────────────
-  # Local development database. On AKS we use Azure Database for
-  # PostgreSQL instead — this container is only for your laptop.
+  # Same image, same port and same data volume as `make db`, so your
+  # accounts and todos are there in both ways of running. (That is
+  # also why only one of the two Postgres containers may run at a
+  # time — `make up` stops the `make db` one for you.)
   postgres:
     image: postgres:18-alpine
-    container_name: todo-postgres
-    restart: unless-stopped
 
-    # Local-only credentials — fine to commit because this DB is
-    # never reachable from outside your machine.
+    # The server's admin user and its default database. Local-only
+    # credentials: this server is only reachable from your Mac.
     environment:
       POSTGRES_USER: todo
       POSTGRES_PASSWORD: todo
       POSTGRES_DB: todo
 
-    # "HOST:CONTAINER" — tools on your laptop (psql, TablePlus,
-    # `make dev`) connect at localhost:5433. Host port 5433 because
-    # a Postgres installed on the Mac already uses 5432. Containers
-    # on the compose network still use postgres:5432.
+    # "HOST:CONTAINER" — your Mac's port 5433 → the container's 5432
+    # (5432 on the Mac is taken by a Postgres installed there).
+    # Containers on the compose network use postgres:5432 directly.
     ports:
       - "5433:5432"
 
-    # Named volume — data survives `docker compose down`.
-    # Wipe it with `docker compose down -v`.
-    # (Postgres 18+ expects the mount at /var/lib/postgresql.)
     volumes:
+      # The data. (Postgres 18+ expects the mount at /var/lib/postgresql.)
       - pgdata:/var/lib/postgresql
+      # On a brand-new, EMPTY volume the image runs every file in this
+      # folder once: db/init.sql creates each service's user + database.
+      # With existing data it is skipped — `make db` already did it.
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
-    # pg_isready returns success once Postgres accepts connections.
-    # The api's depends_on waits for this.
+    # pg_isready succeeds once Postgres accepts connections. The
+    # services below wait for this ("condition: service_healthy").
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d todo"]
-      interval: 5s
+      interval: 2s
       timeout: 3s
-      retries: 10
+      retries: 30
+
+  # ── auth (Go) ─────────────────────────────────────────────
+  auth:
+    # The Go images are built from the repo root ("context: ."),
+    # because they need the shared library in libs/go as well as
+    # their own folder. Same as `make docker` in services/auth.
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    image: todo-auth
+    <<: *hardening
+
+    ports:
+      - "8081:8081"
+
+    # env_file: everything from the service's own .env (JWT_SECRET, …).
+    # environment: wins over the same key from env_file — here the
+    # database address, which is "postgres", not "localhost".
+    env_file:
+      - ./services/auth/.env
+    environment:
+      DATABASE_URL: postgres://auth:auth@postgres:5432/auth_db?sslmode=disable
+
+    # Don't start until Postgres answers — otherwise the service
+    # boots first, can't connect, and exits.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── todo (Go) ─────────────────────────────────────────────
+  # Note what is NOT here: no address of auth. todo never calls
+  # auth; it only checks the token with the shared JWT_SECRET.
+  todo:
+    build:
+      context: .
+      dockerfile: services/todo/Dockerfile
+    image: todo-todo
+    <<: *hardening
+
+    ports:
+      - "8082:8082"
+
+    env_file:
+      - ./services/todo/.env
+    environment:
+      DATABASE_URL: postgres://todo_svc:todo_svc@postgres:5432/todo_db?sslmode=disable
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── agent (Python) ────────────────────────────────────────
+  agent:
+    # Self-contained: its build only needs its own folder.
+    build:
+      context: ./services/agent
+    image: todo-agent
+    <<: *hardening
+
+    ports:
+      - "8083:8083"
+
+    env_file:
+      - ./services/agent/.env
+    environment:
+      # Your .env says ENV=development (auto-reload while you edit
+      # code). In a container the code never changes: production.
+      ENV: production
+      DATABASE_URL: postgresql://agent:agent@postgres:5432/agent_db
+      # The only service-to-service call: the agent's tools → todo.
+      TODO_URL: http://todo:8082
+
+    # The agent needs its database to start. It does NOT wait for
+    # todo: it only calls todo when a chat needs it, and answers
+    # with an error if todo is down.
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── web (Next.js) ─────────────────────────────────────────
+  web:
+    build:
+      context: ./web
+    image: todo-web
+    <<: *hardening
+
+    ports:
+      - "3000:3000"
+
+    # No env_file: web has no secrets. Only the three addresses that
+    # proxy.ts forwards /api/v1/... to, by service name.
+    environment:
+      AUTH_URL: http://auth:8081
+      TODO_URL: http://todo:8082
+      AGENT_URL: http://agent:8083
+
+    # Only the start ORDER (no "wait until healthy"): web doesn't
+    # need the others to start, it shows "Cannot reach the … service"
+    # until they answer.
+    depends_on:
+      - auth
+      - todo
+      - agent
 
 volumes:
+  # "external" = compose uses the volume but did not create it and
+  # will never delete it — not even with `docker compose down -v`.
+  # It is the `make db` volume; `make up` creates it if it's missing.
   pgdata:
+    external: true
+    name: todo-pgdata
